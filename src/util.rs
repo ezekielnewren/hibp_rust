@@ -140,6 +140,35 @@ pub fn binary_search_generate_cache<T: Clone>(v: &dyn IndexByCopy<T>, range: Ran
     return -1;
 }
 
+pub fn binary_search_get_range<T: Clone, F>(cache: &Vec<T>, range: Range<u64>, mut is_less: F, key: &T) -> Range<u64>
+    where
+        F: FnMut(&T, &T) -> bool,
+{
+
+    let mut lo = range.start;
+    let mut hi = range.end-1;
+    let mut depth = 0;
+    let mut less = 0;
+
+    loop {
+        let mid = (hi+lo)>>1;
+        let midval: &T = &cache[((1<<depth)-1)+less];
+
+        if is_less(&key, &midval) {
+            less = 1;
+            hi = mid-1;
+        } else if is_less(&midval, &key) {
+            less = 0;
+            lo = mid+1;
+        }
+
+        depth += 1;
+        if lo > hi || depth >= cache.len() {break;}
+    }
+
+    return lo..hi;
+}
+
 pub fn bubble_sort<T: Clone, F>(v: &mut dyn IndexByCopy<T>, mut is_less: F)
     where
         F: FnMut(&T, &T) -> bool,

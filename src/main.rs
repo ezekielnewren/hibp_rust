@@ -16,7 +16,7 @@ use std::time::Instant;
 use hex;
 use rand::{random, Rng};
 use ring::rand::SecureRandom;
-use crate::util::{binary_search, binary_search_generate_cache, cmp_default, FileArray, IndexByCopy};
+use crate::util::{binary_search, binary_search_generate_cache, binary_search_get_range, cmp_default, FileArray, IndexByCopy};
 
 type HASH = [u8; 16];
 
@@ -95,8 +95,9 @@ impl HIBPDB {
     }
 
     fn find(self: &mut Self, key: HASH) -> i64 {
-        let len = self.index.len();
-        return binary_search(&mut self.index, 0..len, cmp_default(), &key);
+        let mut range = 0..self.index.len();
+        // range = binary_search_get_range(&self.index_cache, 0..self.index.len(), cmp_default(), &key);
+        return binary_search(&mut self.index, range, cmp_default(), &key);
     }
 }
 
@@ -156,7 +157,7 @@ fn go2() {
         hrand.copy_from_slice(&randpool[off..off+size_of::<HASH>()]);
         off += size_of::<HASH>();
         db.find(hrand);
-        binary_search(&mut index, 0..len, cmp_default(), &hrand);
+        // binary_search(&mut index, 0..len, cmp_default(), &hrand);
         count += 1;
         if (count&0xff) == 0 {
             rng.fill(&mut hrand).unwrap();

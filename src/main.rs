@@ -3,6 +3,7 @@ extern crate core;
 mod util;
 mod error;
 
+use std::cmp::{max, min};
 use std::collections::btree_map::Range;
 use std::env;
 use std::ffi::c_void;
@@ -82,7 +83,7 @@ impl HIBPDB {
         let fa = FileArray::new(file_index, size_of::<HASH>() as u64);
 
         let log2 = (fa.len() as f64).log2() as u64;
-        let depth = log2/2+1;
+        let depth = min(log2/2+3, log2);
 
         let mut hfa = HashFileArray {arr: fa};
         let mut cache: Vec<HASH> = Vec::new();
@@ -95,9 +96,10 @@ impl HIBPDB {
     }
 
     fn find(self: &mut Self, key: HASH) -> i64 {
+        let cmp = cmp_default();
         let mut range = 0..self.index.len();
-        // range = binary_search_get_range(&self.index_cache, 0..self.index.len(), cmp_default(), &key);
-        return binary_search(&mut self.index, range, cmp_default(), &key);
+        range = binary_search_get_range(&self.index_cache, 0..self.index.len(), cmp, &key);
+        return binary_search(&mut self.index, range, cmp, &key);
     }
 }
 

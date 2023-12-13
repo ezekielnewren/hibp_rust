@@ -121,16 +121,19 @@ pub fn binary_search_generate_cache<T: Clone>(v: &dyn IndexByCopy<T>, range: Ran
 
 
     loop {
-        let (lo, hi) = queue.pop_front().unwrap();
+        let mut size = queue.len();
+        for _i in 0..size {
+            let (lo, hi) = queue.pop_front().unwrap();
 
-        let mid = (hi+lo)>>1;
-        let mid_val = v.get(mid);
+            let mid = (hi+lo)>>1;
+            let mid_val = v.get(mid);
 
-        cache.push(mid_val);
+            cache.push(mid_val);
 
-        if depth < max_depth {
-            queue.push_back((lo, mid-1));
-            queue.push_back((mid+1, hi));
+            if depth < max_depth {
+                queue.push_back((lo, mid-1));
+                queue.push_back((mid+1, hi));
+            }
         }
 
         depth += 1;
@@ -147,23 +150,21 @@ pub fn binary_search_get_range<T: Clone, F>(cache: &Vec<T>, range: Range<u64>, m
 
     let mut lo = range.start;
     let mut hi = range.end-1;
-    let mut depth = 0;
-    let mut less = 0;
+    let mut mvi = 0;
 
     loop {
         let mid = (hi+lo)>>1;
-        let midval: &T = &cache[((1<<depth)-1)+less];
+        let midval: &T = &cache[mvi];
 
         if is_less(&key, &midval) {
-            less = 1;
+            mvi = ((mvi+1)<<1)+0;
             hi = mid-1;
         } else if is_less(&midval, &key) {
-            less = 0;
+            mvi = ((mvi+1)<<1)+0;
             lo = mid+1;
         }
 
-        depth += 1;
-        if lo > hi || depth >= cache.len() {break;}
+        if lo > hi || mvi >= cache.len() {break;}
     }
 
     return lo..hi;

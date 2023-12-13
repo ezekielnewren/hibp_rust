@@ -1,14 +1,13 @@
+use std::collections::VecDeque;
 use std::fs::File;
-use std::io::{Read, Seek, SeekFrom, Write};
-use std::mem::size_of;
+use std::io::{Read, Write};
 use std::ops::Range;
 use std::os::unix::fs::FileExt;
 
-use crate::error::ValueError;
 pub(crate) struct FileArray {
-    pathname: String,
-    fd: File,
-    element_size: u64,
+    pub pathname: String,
+    pub fd: File,
+    pub element_size: u64,
 }
 
 impl FileArray {
@@ -25,7 +24,7 @@ impl FileArray {
         }
     }
 
-    pub fn get(self: &mut Self, index: u64, value: &mut [u8]) -> std::io::Result<()> {
+    pub fn get(self: &Self, index: u64, value: &mut [u8]) -> std::io::Result<()> {
         if !(0 <= index && index < self.len()) {
             panic!("index out of bounds")
         }
@@ -49,45 +48,19 @@ impl FileArray {
         self.fd.write_all_at(value, index*self.element_size)
     }
 
-    pub fn len(self: &mut Self) -> u64 {
+    pub fn len(self: &Self) -> u64 {
         return self.fd.metadata().unwrap().len()/self.element_size;
     }
 
 }
 
-trait CompactArray: IndexByCopy<u64> {
-
-}
-
-struct FileCompactArray {
-    arr: FileArray,
-    range: Range<u64>,
-}
-
-impl IndexByCopy<u64> for FileCompactArray {
-    fn get(&mut self, index: u64) -> u64 {
-        let mut buff = [0u8; size_of::<u64>()];
-        self.arr.get(index, &mut buff);
-
-        return 0u64;
-    }
-
-    fn set(&mut self, index: u64, value: &u64) {
-
-    }
-
-    fn len(&mut self) -> u64 {
-        todo!()
-    }
-}
-
 pub trait IndexByCopy<T: Clone> {
 
-    fn get(&mut self, index: u64) -> T;
+    fn get(&self, index: u64) -> T;
 
     fn set(&mut self, index: u64, value: &T);
 
-    fn len(&mut self) -> u64;
+    fn len(&self) -> u64;
 }
 
 pub fn swap<T: Clone>(v: &mut dyn IndexByCopy<T>, i: u64, j: u64) {
@@ -99,13 +72,22 @@ pub fn swap<T: Clone>(v: &mut dyn IndexByCopy<T>, i: u64, j: u64) {
     v.set(j, &a);
 }
 
-pub fn binary_search<T: Clone, F>(v: &mut dyn IndexByCopy<T>, range: Range<u64>, key: &T, mut is_less: F) -> i64
+pub fn cmp_default<T: PartialOrd>() -> fn(&T, &T) -> bool {
+    return |lhs: &T, rhs: &T| lhs < rhs;
+}
+
+pub fn binary_search<T: Clone, F>(v: &mut dyn IndexByCopy<T>, range: Range<u64>, mut is_less: F, key: &T) -> i64
     where
         F: FnMut(&T, &T) -> bool,
 {
 
-    let mut lo = range.start;
-    let mut hi = range.end-1;
+    let mut lo = 0;
+    let mut hi = v.len()-1;
+
+    if !range.is_empty() {
+        lo = range.start;
+        hi = range.end-1;
+    }
 
     loop {
         let mid = (hi+lo)>>1;
@@ -120,6 +102,39 @@ pub fn binary_search<T: Clone, F>(v: &mut dyn IndexByCopy<T>, range: Range<u64>,
         }
 
         if lo > hi {break;}
+    }
+
+    return -1;
+}
+
+pub fn binary_search_generate_cache<T: Clone>(v: &dyn IndexByCopy<T>, range: Range<u64>, cache: &mut Vec<T>, max_depth: u64) -> i64
+{
+
+    let mut depth = 0;
+    let mut queue: VecDeque<(u64, u64)> = VecDeque::new();
+
+    if !range.is_empty() {
+        queue.push_back((range.start, range.end-1))
+    } else {
+        queue.push_back((0, v.len()));
+    }
+
+
+    loop {
+        let (lo, hi) = queue.pop_front().unwrap();
+
+        let mid = (hi+lo)>>1;
+        let mid_val = v.get(mid);
+
+        cache.push(mid_val);
+
+        if depth < max_depth {
+            queue.push_back((lo, mid-1));
+            queue.push_back((mid+1, hi));
+        }
+
+        depth += 1;
+        if depth >= max_depth {break;}
     }
 
     return -1;

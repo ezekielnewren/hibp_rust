@@ -8,3 +8,6 @@ edition = "2021"
 [dependencies]
 regex = "1.10.2"
 hex = "0.4.3"
+libc = "0.2.151"
+rand = "0.8.5"
+ring = "0.17.7"

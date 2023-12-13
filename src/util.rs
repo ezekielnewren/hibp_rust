@@ -81,14 +81,6 @@ impl IndexByCopy<u64> for FileCompactArray {
     }
 }
 
-impl CloneableSlice<u64> for FileCompactArray {
-    fn slice(self: &mut Self, range: Range<u64>) {
-        todo!()
-    }
-}
-
-
-
 pub trait IndexByCopy<T: Clone> {
 
     fn get(&mut self, index: u64) -> T;
@@ -97,14 +89,6 @@ pub trait IndexByCopy<T: Clone> {
 
     fn len(&mut self) -> u64;
 }
-
-pub trait CloneableSlice<T: Clone>: IndexByCopy<T> {
-
-    fn slice(self: &mut Self, range: Range<u64>);
-
-}
-
-
 
 pub fn swap<T: Clone>(v: &mut dyn IndexByCopy<T>, i: u64, j: u64) {
     if i == j {return;}

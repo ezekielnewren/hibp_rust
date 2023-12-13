@@ -5,23 +5,21 @@ mod util;
 mod error;
 
 use std::env;
-use std::fs::File;
-use regex::{Error, Regex};
 
-use std::io::{self, prelude::*, BufReader, SeekFrom};
+use std::io::{self, prelude::*};
 use std::mem::size_of;
-use std::ops::{Index, IndexMut, Range};
+use std::ops::{Index};
 
 use hex;
-use crate::util::{binary_search, bubble_sort, CloneableSlice, FileArray, IndexByCopy};
+use crate::util::{binary_search, FileArray, IndexByCopy};
 
 type HASH = [u8; 16];
 
-struct HashArray {
+struct HashFileArray {
     arr: FileArray,
 }
 
-impl IndexByCopy<HASH> for HashArray {
+impl IndexByCopy<HASH> for HashFileArray {
     fn get(&mut self, index: u64) -> HASH {
         let mut tmp = [0u8; 16];
         self.arr.get(index, &mut tmp).unwrap();
@@ -37,14 +35,8 @@ impl IndexByCopy<HASH> for HashArray {
     }
 }
 
-impl CloneableSlice<HASH> for HashArray {
-    fn slice(self: &mut Self, range: Range<u64>) {
-        todo!()
-    }
-}
-
 struct HIBPDB {
-    index: HashArray,
+    index: HashFileArray,
 }
 
 impl HIBPDB {
@@ -54,7 +46,7 @@ impl HIBPDB {
         file_index.push_str("/index.bin");
         let fa = FileArray::new(file_index, size_of::<HASH>() as u64);
         Self {
-            index: HashArray{arr: fa},
+            index: HashFileArray {arr: fa},
         }
     }
 
@@ -62,75 +54,6 @@ impl HIBPDB {
         let len = self.index.len();
         return binary_search(&mut self.index, 0..len, &key, |lhs: &HASH, rhs: &HASH| lhs < rhs);
     }
-}
-
-// pub struct FileSlice<'a> {
-//     fd: &'a File,
-//     element_size: u64,
-//     range: Range<u64>,
-// }
-//
-// impl<T: Clone> CloneableSlice<T> for FileSlice<'_> {
-//     fn slice(self: &mut Self, range: Range<u64>) {
-//         todo!()
-//     }
-// }
-//
-// impl FileSlice<'_> {
-//
-//     pub fn new<T: Clone>(fd: &File,) -> FileSlice {
-//         let element_size = size_of::<T>() as u64;
-//         let size: u64 = fd.metadata().unwrap().len()/element_size;
-//
-//         FileSlice{
-//             fd,
-//             element_size,
-//             range: 0..size,
-//         }
-//     }
-//
-// }
-//
-// impl<T: Clone> IndexByCopy<T> for FileSlice<'_> {
-//     fn get(self: &mut Self, index: u64) -> T {
-//         let mut tmp = [0u8; 16];
-//
-//         self.fd.seek(SeekFrom::Start(16*index)).unwrap();
-//         self.fd.read(&mut tmp).unwrap();
-//
-//         return tmp;
-//     }
-//
-//     fn set(self: &mut Self, index: u64, value: &T) {
-//         self.fd.seek(SeekFrom::Start(16*index)).unwrap();
-//         self.fd.write(value).unwrap();
-//     }
-//
-//     fn len(self: &mut Self) -> u64 {
-//         return self.fd.metadata().unwrap().len()/size_of::<T>() as u64;
-//     }
-// }
-
-
-fn go1() {
-    let args: Vec<_> = env::args().collect();
-
-    let mut stdin = io::stdin();
-
-    let mut buff = [0u8; 1<<20];
-
-    loop {
-        let read = stdin.read(&mut buff).expect("TODO: panic message");
-        if read == 0 {break;}
-    }
-
-    // let pathname = String::from(args[2].as_str());
-    // let mut db = HIBPDB::new(&pathname);
-    //
-    // // let hash: HASH = hex::decode("00000011059407D743D40689940F858C").unwrap().as_slice().try_into().unwrap();
-    // // let index = db.find(hash);
-    //
-    // bubble_sort(&mut db.index, |lhs: &HASH, rhs: &HASH| lhs < rhs);
 }
 
 fn go2() {

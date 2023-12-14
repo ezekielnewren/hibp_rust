@@ -48,19 +48,22 @@ fn go2() {
     let mut randpool = vec![0u8; 16*1000000];
     let mut off = randpool.len();
 
-    let ondisk = false;
 
     let t: (&[u8], &[HASH], &[u8]) = unsafe { index.arr.align_to::<HASH>() };
-    let index_slice: &[HASH] = t.1;
+    let mut index_slice: &[HASH] = t.1;
 
     let mut hrand = [0u8; 16];
-    let mut range = 0..db.index.len();
 
-    let mut loopit = 10;
+    let mut loopit = 1;
     let mut timeit = 5.0;
 
+    let ondisk = true;
     let mut elapsed = 0.0;
     loop {
+        let percent = 1.0;
+        let mut range = 0..(db.index.len() as f64 * percent) as usize;
+        range = 0..100;
+        index_slice = &index_slice[range];
         let beg = Instant::now();
         for i in 0..loopit {
             if off >= randpool.len() {
@@ -74,14 +77,14 @@ fn go2() {
                 db.find(hrand);
             } else {
                 // range = binary_search_get_range(&db.index_cache, range, &hrand);
-                binary_search(&index, &range, &hrand);
-                // let _ = index_slice.binary_search(&hrand);
+                // binary_search(&index, &range, &hrand);
+                let _ = index_slice.binary_search(&hrand);
             }
         }
 
         elapsed = beg.elapsed().as_secs_f64();
         if elapsed > timeit { break; }
-        loopit = loopit + loopit*(timeit/elapsed) as u64;
+        loopit += loopit*(timeit/elapsed) as u64;
     }
     let rate = (loopit as f64 / elapsed) as u64;
 

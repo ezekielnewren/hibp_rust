@@ -82,8 +82,8 @@ impl HIBPDB {
         file_index.push_str("/index.bin");
         let fa = FileArray::new(file_index, size_of::<HASH>() as u64);
 
-        let log2 = (fa.len() as f64).log2() as u64;
-        let depth = min(log2/2+3, log2);
+        let log2 = (fa.len() as f64).log2().ceil() as u64;
+        let depth = min(log2/2, log2);
 
         let mut hfa = HashFileArray {arr: fa};
         let mut cache: Vec<HASH> = Vec::new();
@@ -107,7 +107,6 @@ fn go2() {
 
     let args: Vec<_> = env::args().collect();
 
-
     let mut db = HIBPDB::new(&args[1]);
 
     let mut index = HashMemoryArray{
@@ -117,38 +116,22 @@ fn go2() {
     let fsize = db.index.arr.fd.metadata().unwrap().len() as usize;
     let mut buff = vec![0; fsize];
 
-    // unsafe {
-    //     let len = 600;
-    //     let size = len*size_of::<HASH>();
-    //     let a: *const u8 = std::ptr::null();
-    //     libc::realloc(a as *mut c_void, size);
-    //
-    //     let ptr: *mut u8 = libc::malloc(size) as *mut u8;
-    //     let slice = std::slice::from_raw_parts_mut(ptr, len);
-    // }
-
-    let len = buff.len();
-
     print!("reading in file...");
     std::io::stdout().flush().unwrap();
     db.index.arr.fd.read_exact(buff.as_mut_slice()).unwrap();
     println!("done");
 
-    // let mut stdin = io::stdin();
-    // let mut buff: HASH = [0u8; 16];
-
-
     let rng = ring::rand::SystemRandom::new();
-
-    let mut hrand = [0u8; 16];
-
-    // rng.fill(&mut hrand).unwrap();
-
-
     let mut randpool = vec![0u8; 16*1000000];
     let mut off = randpool.len();
 
-    let len = index.len();
+    let mut ondisk = true;
+    // ondisk = false;
+
+    let cmp = cmp_default::<HASH>();
+    // let mut asdfg = 0..db.index.len();
+
+    let mut hrand = [0u8; 16];
     let mut count = 0u64;
     let beg = Instant::now();
     loop {
@@ -158,12 +141,18 @@ fn go2() {
         }
         hrand.copy_from_slice(&randpool[off..off+size_of::<HASH>()]);
         off += size_of::<HASH>();
-        db.find(hrand);
-        // binary_search(&mut index, 0..len, cmp_default(), &hrand);
+
+        if ondisk {
+            db.find(hrand);
+        } else {
+            let mut range = 0..db.index.len();
+            // range = binary_search_get_range(&db.index_cache, 0..db.index.len(), cmp, &hrand);
+            binary_search(&index, range, cmp_default(), &hrand);
+        }
         count += 1;
         if (count&0xff) == 0 {
             rng.fill(&mut hrand).unwrap();
-            if beg.elapsed().as_millis() > 3000 {
+            if beg.elapsed().as_millis() > 10000 {
                 break;
             }
         }

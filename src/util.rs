@@ -6,6 +6,7 @@ use std::os::unix::fs::FileExt;
 
 pub(crate) struct FileArray {
     pub pathname: String,
+    pub fsize: u64,
     pub fd: File,
     pub element_size: u64,
 }
@@ -19,6 +20,7 @@ impl FileArray {
             .open(pathname.as_str()).unwrap();
         FileArray{
             pathname,
+            fsize: &fd.metadata().unwrap().len()/element_size,
             fd,
             element_size,
         }
@@ -49,7 +51,7 @@ impl FileArray {
     }
 
     pub fn len(self: &Self) -> u64 {
-        return self.fd.metadata().unwrap().len()/self.element_size;
+        return self.fsize;
     }
 
 }
@@ -76,7 +78,7 @@ pub fn cmp_default<T: PartialOrd>() -> fn(&T, &T) -> bool {
     return |lhs: &T, rhs: &T| lhs < rhs;
 }
 
-pub fn binary_search<T: Clone, F>(v: &mut dyn IndexByCopy<T>, range: Range<u64>, mut is_less: F, key: &T) -> i64
+pub fn binary_search<T: Clone, F>(v: &dyn IndexByCopy<T>, range: Range<u64>, mut is_less: F, key: &T) -> i64
     where
         F: FnMut(&T, &T) -> bool,
 {

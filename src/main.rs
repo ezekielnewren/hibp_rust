@@ -20,7 +20,7 @@ use hex;
 use rand::{random, Rng};
 use ring::rand::SecureRandom;
 use crate::db::HIBPDB;
-use crate::util::{binary_search, cmp_default, HASH, HashMemoryArray, IndexByCopy};
+use crate::util::{binary_search, HASH, HashMemoryArray, IndexByCopy};
 
 
 
@@ -50,9 +50,6 @@ fn go2() {
 
     let ondisk = false;
 
-    let cmp = cmp_default::<HASH>();
-    // let mut asdfg = 0..db.index.len();
-
     let mut hrand = [0u8; 16];
     let mut count = 0u64;
     let beg = Instant::now();
@@ -69,7 +66,7 @@ fn go2() {
         } else {
             let mut range = 0..db.index.len();
             // range = binary_search_get_range(&db.index_cache, 0..db.index.len(), cmp, &hrand);
-            binary_search(&index, range, cmp, &hrand);
+            binary_search(&index, range, &hrand);
         }
         count += 1;
         if (count&0xff) == 0 {

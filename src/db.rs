@@ -1,6 +1,6 @@
 use std::cmp::min;
 use std::mem::size_of;
-use crate::util::{binary_search, binary_search_generate_cache, binary_search_get_range, cmp_default, FileArray, HASH, HashFileArray, IndexByCopy};
+use crate::util::{binary_search, binary_search_generate_cache, binary_search_get_range, FileArray, HASH, HashFileArray, IndexByCopy};
 
 pub struct HIBPDB {
     pub(crate) index: HashFileArray,
@@ -28,9 +28,8 @@ impl HIBPDB {
     }
 
     pub(crate) fn find(self: &mut Self, key: HASH) -> i64 {
-        let cmp = cmp_default();
         let mut range = 0..self.index.len();
-        range = binary_search_get_range(&self.index_cache, 0..self.index.len(), cmp, &key);
-        return binary_search(&mut self.index, range, cmp, &key);
+        range = binary_search_get_range(&self.index_cache, 0..self.index.len(), &key);
+        return binary_search(&mut self.index, range, &key);
     }
 }

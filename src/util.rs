@@ -126,14 +126,11 @@ pub fn swap<T: Clone>(v: &mut dyn IndexByCopy<T>, i: u64, j: u64) {
     v.set(j, &a);
 }
 
-pub fn cmp_default<T: PartialOrd>() -> fn(&T, &T) -> bool {
-    return |lhs: &T, rhs: &T| lhs < rhs;
-}
+// pub fn cmp_default<T: PartialOrd>() -> fn(&T, &T) -> bool {
+//     return |lhs: &T, rhs: &T| lhs < rhs;
+// }
 
-pub fn binary_search<T: Clone, F>(v: &dyn IndexByCopy<T>, range: Range<u64>, mut is_less: F, key: &T) -> i64
-    where
-        F: FnMut(&T, &T) -> bool,
-{
+pub fn binary_search<T: Clone + PartialOrd>(v: &dyn IndexByCopy<T>, range: Range<u64>, key: &T) -> i64 {
 
     let mut lo = 0;
     let mut hi = v.len()-1;
@@ -145,11 +142,11 @@ pub fn binary_search<T: Clone, F>(v: &dyn IndexByCopy<T>, range: Range<u64>, mut
 
     loop {
         let mid = (hi+lo)>>1;
-        let midval = v.get(mid);
+        let midval: &T = &v.get(mid);
 
-        if is_less(&key, &midval) {
+        if &key < &midval {
             hi = mid-1;
-        } else if is_less(&midval, &key) {
+        } else if &key > &midval {
             lo = mid+1;
         } else {
             return mid as i64;
@@ -161,8 +158,7 @@ pub fn binary_search<T: Clone, F>(v: &dyn IndexByCopy<T>, range: Range<u64>, mut
     return -1;
 }
 
-pub fn binary_search_generate_cache<T: Clone>(v: &dyn IndexByCopy<T>, range: Range<u64>, cache: &mut Vec<T>, max_depth: u64) -> i64
-{
+pub fn binary_search_generate_cache<T: Clone>(v: &dyn IndexByCopy<T>, range: Range<u64>, cache: &mut Vec<T>, max_depth: u64) -> i64 {
 
     let mut depth = 0;
     let mut queue: VecDeque<(u64, u64)> = VecDeque::new();
@@ -197,11 +193,7 @@ pub fn binary_search_generate_cache<T: Clone>(v: &dyn IndexByCopy<T>, range: Ran
     return -1;
 }
 
-pub fn binary_search_get_range<T: Clone, F>(cache: &Vec<T>, range: Range<u64>, mut is_less: F, key: &T) -> Range<u64>
-    where
-        F: FnMut(&T, &T) -> bool,
-{
-
+pub fn binary_search_get_range<T: Clone + PartialOrd>(cache: &Vec<T>, range: Range<u64>, key: &T) -> Range<u64> {
     let mut lo = range.start;
     let mut hi = range.end-1;
     let mut mvi = 0;
@@ -210,10 +202,10 @@ pub fn binary_search_get_range<T: Clone, F>(cache: &Vec<T>, range: Range<u64>, m
         let mid = (hi+lo)>>1;
         let midval: &T = &cache[mvi];
 
-        if is_less(&key, &midval) {
+        if &key < &midval {
             mvi = ((mvi+1)<<1)+0;
             hi = mid-1;
-        } else if is_less(&midval, &key) {
+        } else if &key > &midval {
             mvi = ((mvi+1)<<1)+0;
             lo = mid+1;
         }
@@ -223,27 +215,3 @@ pub fn binary_search_get_range<T: Clone, F>(cache: &Vec<T>, range: Range<u64>, m
 
     return lo..hi;
 }
-
-pub fn bubble_sort<T: Clone, F>(v: &mut dyn IndexByCopy<T>, mut is_less: F)
-    where
-        F: FnMut(&T, &T) -> bool,
-{
-
-    let mut change = 0;
-
-    loop {
-        change = 0;
-
-        for i in 0..v.len()-1 {
-            let a = v.get(i+1);
-            let b = v.get(i);
-            if is_less(&a, &b) {
-                swap(v, i+1, i);
-                change += 1;
-            }
-        }
-
-        if change == 0 {break;}
-    }
-}
-

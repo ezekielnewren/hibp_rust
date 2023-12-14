@@ -70,7 +70,7 @@ impl IndexByCopy<HASH> for HashFileArray {
     }
 
     fn set(&mut self, index: u64, value: &HASH) {
-        self.arr.set(index, value).expect("TODO: panic message");
+        self.arr.set(index, value).unwrap();
     }
 
     fn len(&self) -> u64 {

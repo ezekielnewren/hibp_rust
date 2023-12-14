@@ -48,8 +48,7 @@ fn go2() {
     let mut randpool = vec![0u8; 16*1000000];
     let mut off = randpool.len();
 
-    let mut ondisk = true;
-    // ondisk = false;
+    let ondisk = false;
 
     let cmp = cmp_default::<HASH>();
     // let mut asdfg = 0..db.index.len();
@@ -70,7 +69,7 @@ fn go2() {
         } else {
             let mut range = 0..db.index.len();
             // range = binary_search_get_range(&db.index_cache, 0..db.index.len(), cmp, &hrand);
-            binary_search(&index, range, cmp_default(), &hrand);
+            binary_search(&index, range, cmp, &hrand);
         }
         count += 1;
         if (count&0xff) == 0 {

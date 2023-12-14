@@ -189,7 +189,7 @@ pub fn binary_search_generate_cache<T: Clone>(v: &dyn IndexByCopy<T>, range: Ran
     return -1;
 }
 
-pub fn binary_search_get_range<T: Clone + PartialOrd>(cache: &Vec<T>, range: Range<u64>, key: &T) -> Range<u64> {
+pub fn binary_search_get_range<T: Clone + PartialOrd>(cache: &Vec<T>, range: &Range<u64>, key: &T) -> Range<u64> {
     let mut lo = range.start;
     let mut hi = range.end-1;
     let mut mvi = 0;

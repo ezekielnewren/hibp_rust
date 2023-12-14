@@ -29,7 +29,7 @@ impl HIBPDB {
 
     pub(crate) fn find(self: &mut Self, key: HASH) -> i64 {
         let mut range = 0..self.index.len();
-        range = binary_search_get_range(&self.index_cache, 0..self.index.len(), &key);
+        range = binary_search_get_range(&self.index_cache, &(0..self.index.len()), &key);
         return binary_search(&mut self.index, &range, &key);
     }
 }

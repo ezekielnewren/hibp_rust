@@ -6,13 +6,12 @@ mod bufferedio;
 mod db;
 
 use std::cmp::{max, min};
-use std::collections::btree_map::Range;
 use std::env;
 use std::ffi::c_void;
 
 use std::io::{self, prelude::*};
 use std::mem::{size_of, transmute};
-use std::ops::{Index};
+use std::ops::{Index, Range};
 use std::ptr::slice_from_raw_parts_mut;
 use std::time::Instant;
 
@@ -60,12 +59,12 @@ fn go2() {
     let ondisk = true;
     let mut elapsed = 0.0;
     loop {
-        let percent = 1.0;
-        let mut range = 0..(db.index.len() as f64 * percent) as usize;
-        range = 0..100;
-        index_slice = &index_slice[range];
+        let percent = 0.2;
+        let mut range: Range<u64> = 0..(db.index.len() as f64 * percent) as u64;
+        // range = 0..100;
+        index_slice = &index_slice[range.start as usize..range.end as usize];
         let beg = Instant::now();
-        for i in 0..loopit {
+        for _ in 0..loopit {
             if off >= randpool.len() {
                 rng.fill(&mut randpool).unwrap();
                 off = 0;
@@ -74,7 +73,10 @@ fn go2() {
             off += size_of::<HASH>();
 
             if ondisk {
-                db.find(hrand);
+                // let mut range = 0..self.index.len();
+                // db.find(hrand);
+                // range = binary_search_get_range(&db.index_cache, &range, &hrand);
+                binary_search(&db.index, &range, &hrand);
             } else {
                 // range = binary_search_get_range(&db.index_cache, range, &hrand);
                 // binary_search(&index, &range, &hrand);

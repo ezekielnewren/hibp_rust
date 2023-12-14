@@ -1,8 +1,11 @@
 use std::collections::VecDeque;
 use std::fs::File;
 use std::io::{Read, Write};
+use std::mem::size_of;
 use std::ops::Range;
 use std::os::unix::fs::FileExt;
+
+pub type HASH = [u8; 16];
 
 pub(crate) struct FileArray {
     pub pathname: String,
@@ -54,6 +57,55 @@ impl FileArray {
         return self.fsize;
     }
 
+}
+
+pub struct HashFileArray {
+    pub arr: FileArray,
+}
+impl IndexByCopy<HASH> for HashFileArray {
+    fn get(&self, index: u64) -> HASH {
+        let mut tmp = [0u8; 16];
+        self.arr.get(index, &mut tmp).unwrap();
+        return tmp;
+    }
+
+    fn set(&mut self, index: u64, value: &HASH) {
+        self.arr.set(index, value).expect("TODO: panic message");
+    }
+
+    fn len(&self) -> u64 {
+        return self.arr.len();
+    }
+}
+
+pub struct HashMemoryArray {
+    pub(crate) arr: Vec<u8>,
+}
+
+impl IndexByCopy<HASH> for HashMemoryArray {
+    fn get(&self, index: u64) -> HASH {
+        let start: usize = (index * size_of::<HASH>() as u64) as usize;
+        let end: usize = start+size_of::<HASH>();
+        let mut junk = [0u8; 16];
+        let mut value = junk.as_mut_slice();
+        let element = &self.arr.as_slice()[start..end];
+        // value = element
+        // value.copy_from_slice(&element);
+        junk.as_mut_slice().copy_from_slice(&element);
+        return junk;
+    }
+
+    fn set(&mut self, index: u64, value: &HASH) {
+        let start = (index*size_of::<HASH>() as u64) as usize;
+        let end = start+size_of::<HASH>();
+        let element: &mut [u8] = &mut self.arr.as_mut_slice()[start..end];
+        // element = value
+        element.copy_from_slice(value);
+    }
+
+    fn len(&self) -> u64 {
+        (self.arr.len() / size_of::<HASH>()) as u64
+    }
 }
 
 pub trait IndexByCopy<T: Clone> {

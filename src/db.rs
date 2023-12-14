@@ -4,7 +4,7 @@ use crate::util::{binary_search, binary_search_generate_cache, binary_search_get
 
 pub struct HIBPDB {
     pub(crate) index: HashFileArray,
-    index_cache: Vec<HASH>,
+    pub(crate) index_cache: Vec<HASH>,
 }
 
 impl HIBPDB {
@@ -30,6 +30,6 @@ impl HIBPDB {
     pub(crate) fn find(self: &mut Self, key: HASH) -> i64 {
         let mut range = 0..self.index.len();
         range = binary_search_get_range(&self.index_cache, 0..self.index.len(), &key);
-        return binary_search(&mut self.index, range, &key);
+        return binary_search(&mut self.index, &range, &key);
     }
 }

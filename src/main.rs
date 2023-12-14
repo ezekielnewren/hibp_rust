@@ -20,7 +20,7 @@ use hex;
 use rand::{random, Rng};
 use ring::rand::SecureRandom;
 use crate::db::HIBPDB;
-use crate::util::{binary_search, HASH, HashMemoryArray, IndexByCopy};
+use crate::util::{binary_search, binary_search_get_range, HASH, HashMemoryArray, IndexByCopy};
 
 
 
@@ -50,33 +50,40 @@ fn go2() {
 
     let ondisk = false;
 
-    let mut hrand = [0u8; 16];
-    let mut count = 0u64;
-    let beg = Instant::now();
-    loop {
-        if off >= randpool.len() {
-            rng.fill(&mut randpool).unwrap();
-            off = 0;
-        }
-        hrand.copy_from_slice(&randpool[off..off+size_of::<HASH>()]);
-        off += size_of::<HASH>();
+    let t: (&[u8], &[HASH], &[u8]) = unsafe { index.arr.align_to::<HASH>() };
+    let index_slice: &[HASH] = t.1;
 
-        if ondisk {
-            db.find(hrand);
-        } else {
-            let mut range = 0..db.index.len();
-            // range = binary_search_get_range(&db.index_cache, 0..db.index.len(), cmp, &hrand);
-            binary_search(&index, range, &hrand);
-        }
-        count += 1;
-        if (count&0xff) == 0 {
-            rng.fill(&mut hrand).unwrap();
-            if beg.elapsed().as_millis() > 10000 {
-                break;
+    let mut hrand = [0u8; 16];
+    let mut range = 0..db.index.len();
+
+    let mut loopit = 10;
+    let mut timeit = 5.0;
+
+    let mut elapsed = 0.0;
+    loop {
+        let beg = Instant::now();
+        for i in 0..loopit {
+            if off >= randpool.len() {
+                rng.fill(&mut randpool).unwrap();
+                off = 0;
+            }
+            hrand.copy_from_slice(&randpool[off..off+size_of::<HASH>()]);
+            off += size_of::<HASH>();
+
+            if ondisk {
+                db.find(hrand);
+            } else {
+                // range = binary_search_get_range(&db.index_cache, range, &hrand);
+                binary_search(&index, &range, &hrand);
+                // let _ = index_slice.binary_search(&hrand);
             }
         }
+
+        elapsed = beg.elapsed().as_secs_f64();
+        if elapsed > timeit { break; }
+        loopit = loopit + loopit*(timeit/elapsed) as u64;
     }
-    let rate = (count as f64 / beg.elapsed().as_secs_f64()) as u64;
+    let rate = (loopit as f64 / elapsed) as u64;
 
     println!("{} hashes/s", rate)
 }

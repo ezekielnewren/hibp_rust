@@ -126,11 +126,7 @@ pub fn swap<T: Clone>(v: &mut dyn IndexByCopy<T>, i: u64, j: u64) {
     v.set(j, &a);
 }
 
-// pub fn cmp_default<T: PartialOrd>() -> fn(&T, &T) -> bool {
-//     return |lhs: &T, rhs: &T| lhs < rhs;
-// }
-
-pub fn binary_search<T: Clone + PartialOrd>(v: &dyn IndexByCopy<T>, range: Range<u64>, key: &T) -> i64 {
+pub fn binary_search<T: Clone + PartialOrd>(v: &dyn IndexByCopy<T>, range: &Range<u64>, key: &T) -> i64 {
 
     let mut lo = 0;
     let mut hi = v.len()-1;

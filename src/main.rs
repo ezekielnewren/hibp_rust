@@ -19,7 +19,7 @@ use hex;
 use rand::{random, Rng};
 use ring::rand::SecureRandom;
 use crate::db::HIBPDB;
-use crate::util::{binary_search, binary_search_get_range, HASH, HashMemoryArray, IndexByCopy};
+use crate::util::{binary_search, binary_search_get_range, FileArray, HASH, HashFileArray, HashMemoryArray, IndexByCopy};
 
 
 
@@ -91,6 +91,81 @@ fn go2() {
     let rate = (loopit as f64 / elapsed) as u64;
 
     println!("{} hashes/s", rate)
+}
+
+// struct IndexByCopySlice<E: IndexByCopy>(E, Range<u64>);
+
+pub trait Indexable<T: Clone> {
+    
+}
+
+// impl<E: Indexable<T>> IndexByCopySlice<E> {
+//     fn new(data: E, range: Range<u64>) -> Self {
+//         IndexByCopySlice(data, range)
+//     }
+// }
+
+
+
+// struct IndexByCopySlice<E: IndexByCopy<T>, T: Clone>(Box<E>, Range<u64>);
+
+// struct IndexByCopySlice<E: IndexByCopy<T>, T: Clone>(E, Range<u64>);
+
+// struct IndexByCopySlice<E: IndexByCopy<T>>(E, Range<u64>);
+// impl<E: IndexByCopy<T>> IndexByCopySlice<E> {
+//     type T: Clone;
+//     fn new(data: E, range: Range<u64>) -> Self {
+//         IndexByCopySlice(data, range)
+//     }
+// }
+
+
+trait Constrainable {
+    fn constrain(self: &Self, range: Range<u64>);
+}
+
+fn go3() {
+
+    let args: Vec<_> = env::args().collect();
+
+    let mut db = HIBPDB::new(&args[1]);
+
+    // let fa: dyn IndexByCopy<HASH> = db.index;
+
+    // let b: dyn IndexByCopy<HASH> = db.index.slice(53..96);
+
+
+    let v: Vec<u8> = vec![0u8; 35];
+    let a = &v.as_slice()[3..8];
+
+    let fa = FileArray::new(String::from(""), 16);
+
+    let hfa = HashFileArray{
+        arr: fa,
+    };
+
+    // type HASH = [u8; 16];
+    let i0: HASH = hfa.get(0);
+    // let sliceable = hfa[10..35];
+
+    // let b = sliceable[0]; // i.e. hfa[10]
+
+
+
+    // let b: dyn IndexByCopy<HASH> = IndexByCopySlice::new(fa, 0..39);
+    //
+    // let a: IndexByCopySlice<HASH> = IndexByCopySlice{
+    //     0: Box::new(fa),
+    //     1: Default::default(),
+    // };
+
+
+
+    // let fa = FileArray::new(String::from(""), 16);
+
+
+
+
 }
 
 fn main() {

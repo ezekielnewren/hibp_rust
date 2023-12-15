@@ -4,6 +4,9 @@ use std::io::{Read, Write};
 use std::mem::size_of;
 use std::ops::Range;
 use std::os::unix::fs::FileExt;
+use std::rc::Rc;
+use memmap2::{Mmap, MmapOptions};
+use crate::{Constrainable};
 
 pub type HASH = [u8; 16];
 
@@ -62,6 +65,7 @@ impl FileArray {
 pub struct HashFileArray {
     pub arr: FileArray,
 }
+
 impl IndexByCopy<HASH> for HashFileArray {
     fn get(&self, index: u64) -> HASH {
         let mut tmp = [0u8; 16];
@@ -77,6 +81,53 @@ impl IndexByCopy<HASH> for HashFileArray {
         return self.arr.len();
     }
 }
+
+pub struct HashFileArraySlice<'a> {
+    arr: Rc<&'a HashFileArray>,
+    lo: u64,
+    hi: u64,
+}
+
+impl HashFileArraySlice<'_> {
+    fn bounds_check(&self, index: u64) {
+        if !(self.lo <= index && index <= self.hi) { panic!("index of out bounds") }
+    }
+}
+
+// impl IndexByCopy<HASH> for HashFileArraySlice<'_> {
+//
+//     fn get(&self, index: u64) -> HASH {
+//         self.bounds_check(index);
+//         self.arr.get(self.lo+index)
+//     }
+//
+//     fn set(&mut self, index: u64, value: &HASH) {
+//         self.bounds_check(index);
+//         self.arr.set(index, value);
+//     }
+//
+//     fn len(&self) -> u64 {
+//         self.hi-self.lo+1
+//     }
+// }
+
+impl HashFileArray {
+
+    pub fn slice(&self, range: Range<u64>) -> HashFileArraySlice {
+        HashFileArraySlice{
+            arr: Rc::new(self),
+            lo: range.start,
+            hi: range.end,
+        }
+    }
+
+}
+
+// impl Constrainable for HashFileArray {
+//     fn constrain(self: &mut Self, range: Range<u64>) {
+//         self.range = range;
+//     }
+// }
 
 pub struct HashMemoryArray {
     pub(crate) arr: Vec<u8>,
@@ -108,7 +159,43 @@ impl IndexByCopy<HASH> for HashMemoryArray {
     }
 }
 
-pub trait IndexByCopy<T: Clone> {
+struct HashMmapArray {
+    pathname: String,
+    fd: File,
+    mmap: Mmap,
+}
+
+impl HashMmapArray {
+    pub fn new(pathname: String) -> HashMmapArray {
+        let fd = File::open(&pathname).unwrap();
+        let mmap = unsafe { MmapOptions::new().map(&fd).unwrap() };
+
+        HashMmapArray {
+            pathname,
+            fd,
+            mmap,
+        }
+    }
+}
+
+impl IndexByCopy<HASH> for HashMmapArray {
+    fn get(&self, index: u64) -> HASH {
+        let arr = unsafe { self.mmap.as_ref().align_to::<HASH>().1 };
+        return arr[index];
+    }
+
+    fn set(&mut self, index: u64, value: &HASH) {
+        let arr = unsafe { self.mmap.as_ref().align_to::<HASH>().1 };
+        return arr[index] = value;
+    }
+
+    fn len(&self) -> u64 {
+        let arr = unsafe { self.mmap.as_ref().align_to::<HASH>().1 };
+        return arr.len() as u64;
+    }
+}
+
+pub trait IndexByCopy<T: Copy> {
 
     fn get(&self, index: u64) -> T;
 
@@ -117,7 +204,7 @@ pub trait IndexByCopy<T: Clone> {
     fn len(&self) -> u64;
 }
 
-pub fn swap<T: Clone>(v: &mut dyn IndexByCopy<T>, i: u64, j: u64) {
+pub fn swap<T: Copy>(v: &mut dyn IndexByCopy<T>, i: u64, j: u64) {
     if i == j {return;}
 
     let a = v.get(i).clone();
@@ -126,7 +213,7 @@ pub fn swap<T: Clone>(v: &mut dyn IndexByCopy<T>, i: u64, j: u64) {
     v.set(j, &a);
 }
 
-pub fn binary_search<T: Clone + PartialOrd>(v: &dyn IndexByCopy<T>, range: &Range<u64>, key: &T) -> i64 {
+pub fn binary_search<T: Copy + PartialOrd>(v: &dyn IndexByCopy<T>, range: &Range<u64>, key: &T) -> i64 {
 
     let mut lo = 0;
     let mut hi = v.len()-1;
@@ -154,7 +241,7 @@ pub fn binary_search<T: Clone + PartialOrd>(v: &dyn IndexByCopy<T>, range: &Rang
     return -1;
 }
 
-pub fn binary_search_generate_cache<T: Clone>(v: &dyn IndexByCopy<T>, range: Range<u64>, cache: &mut Vec<T>, max_depth: u64) -> i64 {
+pub fn binary_search_generate_cache<T: Copy>(v: &dyn IndexByCopy<T>, range: Range<u64>, cache: &mut Vec<T>, max_depth: u64) -> i64 {
 
     let mut depth = 0;
     let mut queue: VecDeque<(u64, u64)> = VecDeque::new();
@@ -189,7 +276,7 @@ pub fn binary_search_generate_cache<T: Clone>(v: &dyn IndexByCopy<T>, range: Ran
     return -1;
 }
 
-pub fn binary_search_get_range<T: Clone + PartialOrd>(cache: &Vec<T>, range: &Range<u64>, key: &T) -> Range<u64> {
+pub fn binary_search_get_range<T: Copy + PartialOrd>(cache: &Vec<T>, range: &Range<u64>, key: &T) -> Range<u64> {
     let mut lo = range.start;
     let mut hi = range.end-1;
     let mut mvi = 0;

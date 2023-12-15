@@ -2,11 +2,11 @@ use std::collections::VecDeque;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::mem::size_of;
-use std::ops::Range;
+use std::ops;
+use std::ops::{Index, Range};
 use std::os::unix::fs::FileExt;
 use std::rc::Rc;
-use memmap2::{Mmap, MmapOptions};
-use crate::{Constrainable};
+use memmap2::{Mmap, MmapMut, MmapOptions};
 
 pub type HASH = [u8; 16];
 
@@ -73,12 +73,14 @@ impl IndexByCopy<HASH> for HashFileArray {
         return tmp;
     }
 
-    fn set(&mut self, index: u64, value: &HASH) {
-        self.arr.set(index, value).unwrap();
-    }
-
     fn len(&self) -> u64 {
         return self.arr.len();
+    }
+}
+
+impl IndexMutByCopy<HASH> for HashFileArray {
+    fn set(&mut self, index: u64, value: &HASH) {
+        self.arr.set(index, value).unwrap();
     }
 }
 
@@ -146,6 +148,12 @@ impl IndexByCopy<HASH> for HashMemoryArray {
         return junk;
     }
 
+    fn len(&self) -> u64 {
+        (self.arr.len() / size_of::<HASH>()) as u64
+    }
+}
+
+impl IndexMutByCopy<HASH> for HashMemoryArray {
     fn set(&mut self, index: u64, value: &HASH) {
         let start = (index*size_of::<HASH>() as u64) as usize;
         let end = start+size_of::<HASH>();
@@ -153,26 +161,17 @@ impl IndexByCopy<HASH> for HashMemoryArray {
         // element = value
         element.copy_from_slice(value);
     }
-
-    fn len(&self) -> u64 {
-        (self.arr.len() / size_of::<HASH>()) as u64
-    }
 }
 
-struct HashMmapArray {
-    pathname: String,
-    fd: File,
+pub struct HashMmapArray {
     mmap: Mmap,
 }
 
 impl HashMmapArray {
-    pub fn new(pathname: String) -> HashMmapArray {
-        let fd = File::open(&pathname).unwrap();
-        let mmap = unsafe { MmapOptions::new().map(&fd).unwrap() };
+    pub fn new(fd: &File) -> HashMmapArray {
+        let mmap = unsafe { MmapOptions::new().map(fd).unwrap() };
 
         HashMmapArray {
-            pathname,
-            fd,
             mmap,
         }
     }
@@ -180,14 +179,10 @@ impl HashMmapArray {
 
 impl IndexByCopy<HASH> for HashMmapArray {
     fn get(&self, index: u64) -> HASH {
-        let arr = unsafe { self.mmap.as_ref().align_to::<HASH>().1 };
-        return arr[index];
+        let arr = unsafe { self.mmap[..].align_to::<HASH>().1 };
+        return arr[index as usize];
     }
 
-    fn set(&mut self, index: u64, value: &HASH) {
-        let arr = unsafe { self.mmap.as_ref().align_to::<HASH>().1 };
-        return arr[index] = value;
-    }
 
     fn len(&self) -> u64 {
         let arr = unsafe { self.mmap.as_ref().align_to::<HASH>().1 };
@@ -195,16 +190,24 @@ impl IndexByCopy<HASH> for HashMmapArray {
     }
 }
 
+// impl IndexMutByCopy<HASH> for HashMmapArray {
+//     fn set(&mut self, index: u64, value: &HASH) {
+//         let mut arr = unsafe { self.mmap[..].align_to::<HASH>().1 };
+//         return &arr[index as usize] = value;
+//     }
+// }
+
 pub trait IndexByCopy<T: Copy> {
 
     fn get(&self, index: u64) -> T;
-
-    fn set(&mut self, index: u64, value: &T);
-
     fn len(&self) -> u64;
 }
 
-pub fn swap<T: Copy>(v: &mut dyn IndexByCopy<T>, i: u64, j: u64) {
+pub trait IndexMutByCopy<T: Copy>: IndexByCopy<T> {
+    fn set(&mut self, index: u64, value: &T);
+}
+
+pub fn swap<T: Copy>(v: &mut dyn IndexMutByCopy<T>, i: u64, j: u64) {
     if i == j {return;}
 
     let a = v.get(i).clone();
@@ -215,12 +218,19 @@ pub fn swap<T: Copy>(v: &mut dyn IndexByCopy<T>, i: u64, j: u64) {
 
 pub fn binary_search<T: Copy + PartialOrd>(v: &dyn IndexByCopy<T>, range: &Range<u64>, key: &T) -> i64 {
 
-    let mut lo = 0;
-    let mut hi = v.len()-1;
+    // let mut lo = 0;
+    // let mut hi = v.len()-1;
+    //
+    // if !range.is_empty() {
+    //     lo = range.start;
+    //     hi = range.end-1;
+    // }
 
-    if !range.is_empty() {
-        lo = range.start;
-        hi = range.end-1;
+    let mut lo = range.start;
+    let mut hi = range.end;
+
+    if hi == v.len() {
+        hi -= 1;
     }
 
     loop {
@@ -278,7 +288,12 @@ pub fn binary_search_generate_cache<T: Copy>(v: &dyn IndexByCopy<T>, range: Rang
 
 pub fn binary_search_get_range<T: Copy + PartialOrd>(cache: &Vec<T>, range: &Range<u64>, key: &T) -> Range<u64> {
     let mut lo = range.start;
-    let mut hi = range.end-1;
+    let mut hi = range.end;
+
+    if hi == cache.len() as u64 {
+        hi -= 1;
+    }
+
     let mut mvi = 0;
 
     loop {

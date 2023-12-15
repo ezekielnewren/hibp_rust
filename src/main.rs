@@ -19,7 +19,7 @@ use hex;
 use rand::{random, Rng};
 use ring::rand::SecureRandom;
 use crate::db::HIBPDB;
-use crate::util::{binary_search, binary_search_get_range, FileArray, HASH, HashFileArray, HashMemoryArray, IndexByCopy};
+use crate::util::{binary_search, binary_search_get_range, FileArray, HASH, HashFileArray, HashMemoryArray, HashMmapArray, IndexByCopy};
 
 
 
@@ -35,13 +35,10 @@ fn go2() {
         arr: vec![0u8; db.index.arr.fd.metadata().unwrap().len() as usize],
     };
 
-    let fsize = db.index.arr.fd.metadata().unwrap().len() as usize;
-    let mut buff = vec![0; fsize];
+    let mut index_mmap = HashMmapArray::new(&db.index.arr.fd);
 
-    print!("reading in file...");
-    std::io::stdout().flush().unwrap();
-    db.index.arr.fd.read_exact(buff.as_mut_slice()).unwrap();
-    println!("done");
+    let fsize = (&db.index.arr.fd).metadata().unwrap().len() as usize;
+    let mut buff = vec![0; fsize];
 
     let rng = ring::rand::SystemRandom::new();
     let mut randpool = vec![0u8; 16*1000000];
@@ -56,13 +53,21 @@ fn go2() {
     let mut loopit = 1;
     let mut timeit = 5.0;
 
-    let ondisk = true;
+    let method = 2;
+
+    if method == 0 {
+        print!("reading in file...");
+        std::io::stdout().flush().unwrap();
+        db.index.arr.fd.read_exact(buff.as_mut_slice()).unwrap();
+        println!("done");
+    }
+
     let mut elapsed = 0.0;
     loop {
         let percent = 0.2;
         let mut range: Range<u64> = 0..(db.index.len() as f64 * percent) as u64;
-        // range = 0..100;
-        index_slice = &index_slice[range.start as usize..range.end as usize];
+        range = 0..db.index.len();
+        // index_slice = &index_slice[range.start as usize..range.end as usize];
         let beg = Instant::now();
         for _ in 0..loopit {
             if off >= randpool.len() {
@@ -72,15 +77,24 @@ fn go2() {
             hrand.copy_from_slice(&randpool[off..off+size_of::<HASH>()]);
             off += size_of::<HASH>();
 
-            if ondisk {
-                // let mut range = 0..self.index.len();
-                // db.find(hrand);
-                // range = binary_search_get_range(&db.index_cache, &range, &hrand);
-                binary_search(&db.index, &range, &hrand);
-            } else {
-                // range = binary_search_get_range(&db.index_cache, range, &hrand);
-                // binary_search(&index, &range, &hrand);
-                let _ = index_slice.binary_search(&hrand);
+            match method {
+                0 => {
+                    let _ = index_slice.binary_search(&hrand);
+                },
+                1 => {
+                    binary_search(&index, &range, &hrand);
+                },
+                2 => {
+                    range = binary_search_get_range(&db.index_cache, &range, &hrand);
+                    binary_search(&index_mmap, &range, &hrand);
+                },
+                3 => {
+                    // let mut range = 0..self.index.len();
+                    // db.find(hrand);
+                    // range = binary_search_get_range(&db.index_cache, &range, &hrand);
+                    binary_search(&db.index, &range, &hrand);
+                },
+                _ => panic!("invalid method")
             }
         }
 
@@ -93,78 +107,11 @@ fn go2() {
     println!("{} hashes/s", rate)
 }
 
-// struct IndexByCopySlice<E: IndexByCopy>(E, Range<u64>);
-
-pub trait Indexable<T: Clone> {
-    
-}
-
-// impl<E: Indexable<T>> IndexByCopySlice<E> {
-//     fn new(data: E, range: Range<u64>) -> Self {
-//         IndexByCopySlice(data, range)
-//     }
-// }
-
-
-
-// struct IndexByCopySlice<E: IndexByCopy<T>, T: Clone>(Box<E>, Range<u64>);
-
-// struct IndexByCopySlice<E: IndexByCopy<T>, T: Clone>(E, Range<u64>);
-
-// struct IndexByCopySlice<E: IndexByCopy<T>>(E, Range<u64>);
-// impl<E: IndexByCopy<T>> IndexByCopySlice<E> {
-//     type T: Clone;
-//     fn new(data: E, range: Range<u64>) -> Self {
-//         IndexByCopySlice(data, range)
-//     }
-// }
-
-
-trait Constrainable {
-    fn constrain(self: &Self, range: Range<u64>);
-}
-
 fn go3() {
 
     let args: Vec<_> = env::args().collect();
 
     let mut db = HIBPDB::new(&args[1]);
-
-    // let fa: dyn IndexByCopy<HASH> = db.index;
-
-    // let b: dyn IndexByCopy<HASH> = db.index.slice(53..96);
-
-
-    let v: Vec<u8> = vec![0u8; 35];
-    let a = &v.as_slice()[3..8];
-
-    let fa = FileArray::new(String::from(""), 16);
-
-    let hfa = HashFileArray{
-        arr: fa,
-    };
-
-    // type HASH = [u8; 16];
-    let i0: HASH = hfa.get(0);
-    // let sliceable = hfa[10..35];
-
-    // let b = sliceable[0]; // i.e. hfa[10]
-
-
-
-    // let b: dyn IndexByCopy<HASH> = IndexByCopySlice::new(fa, 0..39);
-    //
-    // let a: IndexByCopySlice<HASH> = IndexByCopySlice{
-    //     0: Box::new(fa),
-    //     1: Default::default(),
-    // };
-
-
-
-    // let fa = FileArray::new(String::from(""), 16);
-
-
-
 
 }
 

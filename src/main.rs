@@ -55,7 +55,7 @@ fn go2() {
 
     let method = 2;
 
-    if method == 0 {
+    if method == 0 || method == 1 {
         print!("reading in file...");
         std::io::stdout().flush().unwrap();
         db.index.arr.fd.read_exact(buff.as_mut_slice()).unwrap();
@@ -66,10 +66,9 @@ fn go2() {
     loop {
         let percent = 0.2;
         let mut range: Range<u64> = 0..(db.index.len() as f64 * percent) as u64;
-        range = 0..db.index.len();
         // index_slice = &index_slice[range.start as usize..range.end as usize];
         let beg = Instant::now();
-        for _ in 0..loopit {
+        for _i in 0..loopit {
             if off >= randpool.len() {
                 rng.fill(&mut randpool).unwrap();
                 off = 0;
@@ -85,6 +84,7 @@ fn go2() {
                     binary_search(&index, &range, &hrand);
                 },
                 2 => {
+                    range = 0..db.index.len();
                     range = binary_search_get_range(&db.index_cache, &range, &hrand);
                     binary_search(&index_mmap, &range, &hrand);
                 },

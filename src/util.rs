@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::fmt::Display;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::mem::size_of;
@@ -9,6 +10,13 @@ use std::rc::Rc;
 use memmap2::{Mmap, MmapMut, MmapOptions};
 
 pub type HASH = [u8; 16];
+
+pub fn check_bounds<T: PartialOrd + Display>(lo: T, value: T, hi: T) {
+    if !(lo <= value && value <= hi) {
+        // let msg = format!("{} <= {} <= {} check failed", lo.to_string(), value.to_string(), hi.to_string());
+        panic!("{} <= {} <= {} check failed", lo, value, hi);
+    }
+}
 
 pub(crate) struct FileArray {
     pub pathname: String,
@@ -287,12 +295,9 @@ pub fn binary_search_generate_cache<T: Copy>(v: &dyn IndexByCopy<T>, range: Rang
 }
 
 pub fn binary_search_get_range<T: Copy + PartialOrd>(cache: &Vec<T>, range: &Range<u64>, key: &T) -> Range<u64> {
+    // can't do any bounds checking because we're working with the cache not the original array
     let mut lo = range.start;
     let mut hi = range.end;
-
-    if hi == cache.len() as u64 {
-        hi -= 1;
-    }
 
     let mut mvi = 0;
 

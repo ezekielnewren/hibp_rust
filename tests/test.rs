@@ -26,17 +26,20 @@ impl<T> ops::Index<u64> for AbsArray<T> {
     }
 }
 
-impl<T: Copy> ops::Index<Range<u64>> for AbsArray<T> {
-    type Output = AbsArray<T>;
+struct MyStruct {
+    data: Vec<[u8; 16]>,
+}
 
-    // fn index(&self, index: Range<u64>) -> &Self::Output {
-    //     let r = index.start as usize..index.end as usize;
-    //     let mut a: Vec<T> = Vec::new();
-    //     a.copy_from_slice(&self.arr[r]);
-    //     AbsArray {
-    //         arr: a,
-    //     }
-    // }
+impl MyStruct {
+    fn new(size: usize) -> MyStruct {
+        let HASH_NULL = [0u8; 16];
+        let v: Vec<[u8; 16]> = vec![HASH_NULL; size];
+        // let data = &v[..]; // Take a slice of the whole Vec
+
+        MyStruct {
+            data: v
+        }
+    }
 }
 
 
@@ -54,7 +57,6 @@ mod tests {
         };
 
         let a: &u8 = &arr[0];
-        let b: &AbsArray<u8> = &arr[0..5];
     }
 
     #[test]

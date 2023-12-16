@@ -1,35 +1,59 @@
 use std::cmp::min;
+use std::fs::File;
 use std::mem::size_of;
-use crate::util::{binary_search, binary_search_generate_cache, binary_search_get_range, FileArray, HASH, HashFileArray, IndexByCopy};
+use memmap2::{Mmap, MmapOptions};
+use crate::util::{HASH, binary_search_generate_cache, binary_search_get_range};
+
+pub struct FileArray {
+    pub pathname: String,
+    pub fd: File,
+    pub mmap: Mmap,
+}
 
 pub struct HIBPDB {
-    pub(crate) index: HashFileArray,
+    pub(crate) index: FileArray,
     pub(crate) index_cache: Vec<HASH>,
 }
 
+
 impl HIBPDB {
-    pub fn new(v: &String) -> Self {
+    pub fn new(v: &String) -> HIBPDB {
         let dbdir = v.clone();
         let mut file_index = dbdir.clone();
         file_index.push_str("/index.bin");
-        let fa = FileArray::new(file_index, size_of::<HASH>() as u64);
+        // let fa = FileArray::new(file_index, size_of::<HASH>() as u64);
 
-        let log2 = (fa.len() as f64).log2().ceil() as u64;
+        let fd = File::open(file_index).unwrap();
+        let mmap = unsafe { MmapOptions::new().map(&fd).unwrap() };
+
+        let fa = FileArray {
+            pathname: v.clone(),
+            fd,
+            mmap,
+        };
+
+        let index = unsafe { (&fa.mmap).align_to::<HASH>().1 };
+
+        let log2 = (index.len() as f64).log2().ceil() as u64;
         let depth = min(log2/2, log2);
-
-        let mut hfa = HashFileArray {arr: fa};
-        let mut cache: Vec<HASH> = Vec::new();
-        binary_search_generate_cache(&hfa, 0..hfa.len(), &mut cache, depth);
+        let mut index_cache: Vec<HASH> = Vec::new();
+        binary_search_generate_cache(&index, 0..index.len() as u64, &mut index_cache, depth);
 
         Self {
-            index: hfa,
-            index_cache: cache,
+            index: fa,
+            index_cache: Vec::new(),
         }
     }
 
-    pub(crate) fn find(self: &mut Self, key: HASH) -> i64 {
-        let mut range = 0..self.index.len();
-        range = binary_search_get_range(&self.index_cache, &(0..self.index.len()), &key);
-        return binary_search(&mut self.index, &range, &key);
+    pub(crate) fn index(self: &Self) -> &[HASH] {
+        return unsafe { self.index.mmap.align_to::<HASH>().1 };
+    }
+
+    pub(crate) fn find(self: &mut Self, key: HASH) -> Result<usize, usize> {
+        let mut range = 0..self.index().len() as u64;
+        range = binary_search_get_range(&self.index_cache, &range, &key);
+        return self.index().binary_search(&key);
     }
 }
+
+

@@ -5,21 +5,17 @@ mod error;
 mod bufferedio;
 mod db;
 
-use std::cmp::{max, min};
 use std::env;
-use std::ffi::c_void;
-
-use std::io::{self, prelude::*};
-use std::mem::{size_of, transmute};
+use std::io::{prelude::*};
+use std::mem::{size_of};
 use std::ops::{Index, Range};
-use std::ptr::slice_from_raw_parts_mut;
 use std::time::Instant;
 
 use hex;
-use rand::{random, Rng};
+use rand::{Rng};
 use ring::rand::SecureRandom;
 use crate::db::HIBPDB;
-use crate::util::{binary_search, binary_search_get_range, FileArray, HASH, HashFileArray, HashMemoryArray, HashMmapArray, IndexByCopy};
+use crate::util::{HASH, binary_search_get_range};
 
 
 
@@ -31,41 +27,33 @@ fn go2() {
 
     let mut db = HIBPDB::new(&args[1]);
 
-    let mut index = HashMemoryArray{
-        arr: vec![0u8; db.index.arr.fd.metadata().unwrap().len() as usize],
-    };
 
-    let mut index_mmap = HashMmapArray::new(&db.index.arr.fd);
-
-    let fsize = (&db.index.arr.fd).metadata().unwrap().len() as usize;
-    let mut buff = vec![0; fsize];
 
     let rng = ring::rand::SystemRandom::new();
     let mut randpool = vec![0u8; 16*1000000];
     let mut off = randpool.len();
 
 
-    let t: (&[u8], &[HASH], &[u8]) = unsafe { index.arr.align_to::<HASH>() };
-    let mut index_slice: &[HASH] = t.1;
-
     let mut hrand = [0u8; 16];
 
     let mut loopit = 1;
     let mut timeit = 5.0;
 
-    let method = 2;
+    let method = 0;
 
-    if method == 0 || method == 1 {
+    let mut arr: Vec<HASH> = vec![[0u8; 16]; db.index().len()];
+    if method == 0 {
         print!("reading in file...");
         std::io::stdout().flush().unwrap();
-        db.index.arr.fd.read_exact(buff.as_mut_slice()).unwrap();
+        let buff = unsafe { arr.align_to_mut::<u8>().1 };
+        db.index.fd.read_exact(buff).unwrap();
         println!("done");
     }
 
     let mut elapsed = 0.0;
     loop {
         let percent = 0.2;
-        let mut range: Range<u64> = 0..(db.index.len() as f64 * percent) as u64;
+        let mut range: Range<u64> = 0..(db.index().len() as f64 * percent) as u64;
         // index_slice = &index_slice[range.start as usize..range.end as usize];
         let beg = Instant::now();
         for _i in 0..loopit {
@@ -78,21 +66,10 @@ fn go2() {
 
             match method {
                 0 => {
-                    let _ = index_slice.binary_search(&hrand);
+                    let _ = arr.binary_search(&hrand);
                 },
                 1 => {
-                    binary_search(&index, &range, &hrand);
-                },
-                2 => {
-                    range = 0..db.index.len();
-                    range = binary_search_get_range(&db.index_cache, &range, &hrand);
-                    binary_search(&index_mmap, &range, &hrand);
-                },
-                3 => {
-                    // let mut range = 0..self.index.len();
-                    // db.find(hrand);
-                    // range = binary_search_get_range(&db.index_cache, &range, &hrand);
-                    binary_search(&db.index, &range, &hrand);
+                    let _ = db.index().binary_search(&hrand);
                 },
                 _ => panic!("invalid method")
             }

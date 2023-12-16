@@ -18,7 +18,7 @@ use md4::digest::Update;
 use rand::{Rng};
 use ring::rand::SecureRandom;
 use crate::db::HIBPDB;
-use crate::util::{HASH, binary_search_get_range};
+use crate::util::{HASH, binary_search_get_range, encode_to_utf16le, HashAndPassword};
 
 
 
@@ -87,12 +87,6 @@ fn go2() {
     println!("{} hashes/s", rate)
 }
 
-fn encode_to_utf16le(line: &str) -> Vec<u8> {
-    let utf16: Vec<u16> = line.encode_utf16().collect();
-    let bytes: Vec<u8> = utf16.iter().flat_map(|&v| v.to_le_bytes()).collect();
-    return bytes;
-}
-
 fn go3() {
 
     let args: Vec<_> = env::args().collect();
@@ -103,8 +97,8 @@ fn go3() {
 
     let mut buff: Vec<u8> = Vec::new();
 
-    let mut linecount = 0;
-    let mut asciicount = 0;
+    let mut queue = HashAndPassword::new();
+
     let mut unreadable = 0;
 
     let start = Instant::now();
@@ -121,27 +115,9 @@ fn go3() {
         }
         match std::str::from_utf8(buff.as_slice()) {
             Ok(v) => {
-                let mut line: &str = v.trim_end_matches('\n');
-                let mut hash_input: &[u8] = line.as_bytes();
+                let line: &str = v.trim_end_matches('\n');
 
-                // if line.is_empty() { continue; }
-                // let t = line.chars().filter(|&c| c != '\0').collect::<String>();
-                // line = t.as_str();
-                // if line.is_empty() { continue; }
-
-                let raw = encode_to_utf16le(&line);
-                hash_input = raw.as_slice();
-
-                let mut hasher = Md4::new();
-                md4::Digest::update(&mut hasher, hash_input);
-                let hash: HASH = hasher.finalize().into();
-
-                let is_ascii = line.chars().all(|c| c.is_ascii());
-                if is_ascii {
-                    asciicount += 1;
-                }
-
-                linecount += 1;
+                queue.add_password(line);
             }
             Err(err) => {
                 unreadable += 1;
@@ -149,11 +125,34 @@ fn go3() {
             }
         }
     }
+
+    for i in 0..queue.len() {
+        // get the password
+        let e_password = queue.index_password(i);
+
+        let password: &str = std::str::from_utf8(e_password).unwrap();
+        let raw = encode_to_utf16le(password);
+
+        let mut hasher = Md4::new();
+        md4::Digest::update(&mut hasher, raw);
+        let hash: HASH = hasher.finalize().into();
+
+        // update the hash
+        let e_hash = queue.index_hash_mut(i);
+        e_hash.copy_from_slice(&hash);
+    }
+
     let seconds = start.elapsed().as_secs_f64();
-    let rate = (linecount as f64 / seconds) as u64;
+    let rate = (queue.len() as f64 / seconds) as u64;
 
+    for i in 0..10 {
+        let hash = hex::encode(queue.index_hash(i));
+        let password = std::str::from_utf8(queue.index_password(i)).unwrap();
 
-    println!("lines: {}, ascii: {}, unreadables: {}", linecount, asciicount, unreadable);
+        println!("{} {}", hash, password);
+    }
+
+    println!("lines: {}, unreadables: {}", queue.len(), unreadable);
     println!("rate: {}", rate)
 
 

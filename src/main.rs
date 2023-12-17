@@ -7,6 +7,7 @@ mod db;
 
 use md4::{Digest, Md4};
 use std::{env, io};
+use std::any::Any;
 use std::io::{BufReader, prelude::*};
 use std::mem::{size_of};
 use std::ops::{Index, Range};
@@ -94,12 +95,14 @@ fn go3() {
     let mut db = HIBPDB::new(&args[1]);
 
     let mut stdin = BufReader::new(io::stdin());
-
     let mut buff: Vec<u8> = Vec::new();
 
     let mut queue = HashAndPassword::new();
 
-    let mut unreadable = 0;
+    let mut found = 0u64;
+    let mut miss = 0u64;
+
+    let queue_threshold = 1;
 
     let start = Instant::now();
     loop {
@@ -118,28 +121,42 @@ fn go3() {
                 let line: &str = v.trim_end_matches('\n');
 
                 queue.add_password(line);
+                if queue.len() >= queue_threshold {
+                    queue.hash_and_sort();
+                    for i in 0..queue.len() {
+                        let key: HASH = queue.index_hash(i).try_into().unwrap();
+                        let result = db.find(key);
+                        match result {
+                            Ok(index) => {
+                                found += 1;
+                            },
+                            Err(insert_index) => {
+                                miss += 1;
+                            }
+                        }
+                    }
+                    queue.clear();
+                }
             }
             Err(err) => {
-                unreadable += 1;
                 continue;
             }
         }
     }
 
-    queue.hash_passwords();
-    queue.sort();
+    queue.hash_and_sort();
 
     let seconds = start.elapsed().as_secs_f64();
     let rate = (queue.len() as f64 / seconds) as u64;
 
-    for i in 0..10 {
+    for i in 0..std::cmp::min(10, queue.len()) {
         let hash = hex::encode(queue.index_hash(i));
         let password = std::str::from_utf8(queue.index_password(i)).unwrap();
 
         println!("{} {}", hash, password);
     }
 
-    println!("lines: {}, unreadables: {}", queue.len(), unreadable);
+    println!("lines: {}, found: {}, miss: {}", queue.len(), found, miss);
     println!("rate: {}", rate)
 
 

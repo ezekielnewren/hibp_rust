@@ -41,7 +41,7 @@ impl HIBPDB {
 
         Self {
             index: fa,
-            index_cache: Vec::new(),
+            index_cache,
         }
     }
 

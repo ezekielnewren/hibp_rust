@@ -19,15 +19,6 @@ pub struct HashAndPassword {
     order: Vec<u64>,
 }
 
-// pub fn index_hash_and_password(inst: &mut HashAndPassword, index: u64) {
-//     let e = inst[index];
-//     let e_hash = &mut inst[index][0..size_of::<HASH>()];
-//
-//     let e = &mut self[index];
-//     let end = e.len();
-//     return &mut e[size_of::<HASH>()..end];
-// }
-
 impl Index<u64> for HashAndPassword {
     type Output = [u8];
 
@@ -52,12 +43,6 @@ impl HashAndPassword {
             off: Vec::new(),
             order: Vec::new(),
         }
-    }
-
-    pub fn clear(&mut self) {
-        self.buff.clear();
-        self.off.clear();
-        self.order.clear();
     }
 
     pub fn add_password(&mut self, line: &str) {
@@ -130,13 +115,22 @@ impl HashAndPassword {
         self.order.copy_from_slice(order.as_slice());
     }
 
+    pub fn clear(&mut self) {
+        self.buff.clear();
+        self.off.clear();
+        self.order.clear();
+    }
+
+    pub fn hash_and_sort(&mut self) {
+        self.hash_passwords();
+        self.sort();
+    }
+
     pub fn len(&self) -> u64 {
         return self.off.len() as u64;
     }
 
 }
-
-
 
 pub fn binary_search_generate_cache<T: Copy>(v: &[T], range: Range<u64>, cache: &mut Vec<T>, max_depth: u64) -> i64 {
 

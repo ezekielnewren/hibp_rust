@@ -126,21 +126,8 @@ fn go3() {
         }
     }
 
-    for i in 0..queue.len() {
-        // get the password
-        let e_password = queue.index_password(i);
-
-        let password: &str = std::str::from_utf8(e_password).unwrap();
-        let raw = encode_to_utf16le(password);
-
-        let mut hasher = Md4::new();
-        md4::Digest::update(&mut hasher, raw);
-        let hash: HASH = hasher.finalize().into();
-
-        // update the hash
-        let e_hash = queue.index_hash_mut(i);
-        e_hash.copy_from_slice(&hash);
-    }
+    queue.hash_passwords();
+    queue.sort();
 
     let seconds = start.elapsed().as_secs_f64();
     let rate = (queue.len() as f64 / seconds) as u64;

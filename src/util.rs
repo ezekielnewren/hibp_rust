@@ -8,9 +8,7 @@ pub type HASH = [u8; 16];
 pub const HASH_NULL: HASH = [0u8; 16];
 
 pub fn encode_to_utf16le(line: &str) -> Vec<u8> {
-    let utf16: Vec<u16> = line.encode_utf16().collect();
-    let bytes: Vec<u8> = utf16.iter().flat_map(|&v| v.to_le_bytes()).collect();
-    return bytes;
+    return line.encode_utf16().flat_map(|v| v.to_le_bytes()).collect();
 }
 
 pub struct HashAndPassword {

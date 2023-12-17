@@ -4,6 +4,7 @@ mod util;
 mod error;
 mod bufferedio;
 mod db;
+mod md4_fast;
 
 use md4::{Digest, Md4};
 use std::{env, io};
@@ -104,6 +105,8 @@ fn go3() {
 
     let queue_threshold = 1;
 
+    let mut linecount = 0u64;
+
     let start = Instant::now();
     loop {
         buff.clear();
@@ -119,6 +122,7 @@ fn go3() {
         match std::str::from_utf8(buff.as_slice()) {
             Ok(v) => {
                 let line: &str = v.trim_end_matches('\n');
+                linecount += 1;
 
                 queue.add_password(line);
                 if queue.len() >= queue_threshold {
@@ -147,7 +151,7 @@ fn go3() {
     queue.hash_and_sort();
 
     let seconds = start.elapsed().as_secs_f64();
-    let rate = (queue.len() as f64 / seconds) as u64;
+    let rate = (linecount as f64 / seconds) as u64;
 
     for i in 0..std::cmp::min(10, queue.len()) {
         let hash = hex::encode(queue.index_hash(i));
@@ -156,7 +160,7 @@ fn go3() {
         println!("{} {}", hash, password);
     }
 
-    println!("lines: {}, found: {}, miss: {}", queue.len(), found, miss);
+    println!("lines: {}, found: {}, miss: {}", linecount, found, miss);
     println!("rate: {}", rate)
 
 

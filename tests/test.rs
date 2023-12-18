@@ -19,34 +19,6 @@ fn bad_add(a: i32, b: i32) -> i32 {
 }
 
 
-struct AbsArray<T> {
-    arr: Vec<T>,
-}
-
-impl<T> ops::Index<u64> for AbsArray<T> {
-    type Output = T;
-
-    fn index(&self, index: u64) -> &Self::Output {
-        return &self.arr[index as usize];
-    }
-}
-
-struct MyStruct {
-    data: Vec<[u8; 16]>,
-}
-
-impl MyStruct {
-    fn new(size: usize) -> MyStruct {
-        let HASH_NULL = [0u8; 16];
-        let v: Vec<[u8; 16]> = vec![HASH_NULL; size];
-        // let data = &v[..]; // Take a slice of the whole Vec
-
-        MyStruct {
-            data: v
-        }
-    }
-}
-
 use hibp_rust::{HASH, RandomItemGenerator};
 
 extern crate test;
@@ -84,7 +56,7 @@ fn test_random_item_generator() {
 
     let mut rate = 0u64;
 
-    let min_runtime = Duration::from_secs_f64(5.0);
+    let min_runtime = Duration::from_secs_f64(1.0);
 
     rate = timeit(min_runtime, || {
         rng.next_item();
@@ -108,17 +80,6 @@ fn test_random_item_generator() {
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-
-    fn test_vector() {
-        // let x: Vec<u8> = vec![0u8; 1000];
-        // let b = &x[0..5];
-
-        let arr = AbsArray{
-            arr: vec![0u8; 1000],
-        };
-
-        let a: &u8 = &arr[0];
-    }
 
     #[test]
     fn test_add() {

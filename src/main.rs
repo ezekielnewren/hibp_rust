@@ -1,6 +1,6 @@
 extern crate core;
 
-mod util;
+mod lib;
 mod error;
 mod bufferedio;
 mod db;
@@ -22,7 +22,7 @@ use md4::digest::Update;
 use rand::{Rng};
 use ring::rand::{SecureRandom, SystemRandom};
 use crate::db::HIBPDB;
-use crate::util::{HASH, HASH_NULL, RandomItemGenerator, HashAndPassword};
+use crate::lib::{HASH, HASH_NULL, RandomItemGenerator, HashAndPassword};
 
 
 fn go2() {

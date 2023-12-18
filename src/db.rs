@@ -2,7 +2,7 @@ use std::cmp::min;
 use std::fs::File;
 use std::mem::size_of;
 use memmap2::{Mmap, MmapOptions};
-use crate::util::{HASH, binary_search_generate_cache, binary_search_get_range};
+use crate::lib::{HASH, binary_search_generate_cache, binary_search_get_range};
 
 pub struct FileArray {
     pub pathname: String,

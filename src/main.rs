@@ -9,6 +9,8 @@ mod md4_fast;
 use md4::{Digest, Md4};
 use std::{env, io};
 use std::any::Any;
+// use std::array::IntoIter;
+use core::option::IntoIter;
 use std::io::{BufReader, prelude::*};
 use std::mem::{size_of};
 use std::ops::{Index, Range};
@@ -18,9 +20,53 @@ use std::time::Instant;
 use hex;
 use md4::digest::Update;
 use rand::{Rng};
-use ring::rand::SecureRandom;
+use ring::rand::{SecureRandom, SystemRandom};
 use crate::db::HIBPDB;
-use crate::util::{HASH, binary_search_get_range, encode_to_utf16le, HashAndPassword};
+use crate::util::{HASH, binary_search_get_range, encode_to_utf16le, HashAndPassword, HASH_NULL};
+
+
+struct RandomItemGenerator<T: for<'a> From<&'a [u8]>> {
+    rng: SystemRandom,
+    pool: Vec<u8>,
+    item_size: usize,
+    off: usize,
+    _marker: std::marker::PhantomData<T>,
+}
+
+impl<T: for<'a> From<&'a [u8]>> RandomItemGenerator<T> {
+    pub fn new(buffer_size: usize) -> Self {
+        let item_size = size_of::<T>();
+        let size: usize = (item_size * buffer_size) as usize;
+        Self {
+            rng: SystemRandom::new(),
+            pool: vec![0u8; size],
+            item_size,
+            off: size,
+            _marker: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<T: for<'a> From<&'a [u8]>> Iterator for RandomItemGenerator<T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.off == self.pool.len() {
+            self.rng.fill(&mut self.pool.as_mut_slice()).unwrap();
+        }
+
+        Some((&self.pool[self.off..self.off+self.item_size]).into())
+    }
+}
+
+
+
+
+
+
+
+
+
 
 
 
@@ -34,19 +80,27 @@ fn go2() {
 
 
 
-    let rng = ring::rand::SystemRandom::new();
-    let mut randpool = vec![0u8; 16*1000000];
-    let mut off = randpool.len();
+    // let rng = SystemRandom::new();
+    // let mut randpool = vec![0u8; 16*1000000];
+    // let mut off = randpool.len();
+    
+    let mut rng: RandomItemGenerator<HASH> = RandomItemGenerator::new(1000000);
 
+    for v in rng {
+        println!("{}", v);
+    }
 
-    let mut hrand = [0u8; 16];
+    // let v: HASH = rng.next().unwrap();
+    // let h: HASH = v.into();
+
+    let mut hrand = HASH_NULL;
 
     let mut loopit = 1;
     let mut timeit = 5.0;
 
     let method = 0;
 
-    let mut arr: Vec<HASH> = vec![[0u8; 16]; db.index().len()];
+    let mut arr: Vec<HASH> = vec![HASH_NULL; db.index().len()];
     if method == 0 {
         print!("reading in file...");
         std::io::stdout().flush().unwrap();
@@ -62,12 +116,12 @@ fn go2() {
         // index_slice = &index_slice[range.start as usize..range.end as usize];
         let beg = Instant::now();
         for _i in 0..loopit {
-            if off >= randpool.len() {
-                rng.fill(&mut randpool).unwrap();
-                off = 0;
-            }
-            hrand.copy_from_slice(&randpool[off..off+size_of::<HASH>()]);
-            off += size_of::<HASH>();
+            // if off >= randpool.len() {
+            //     rng.fill(&mut randpool).unwrap();
+            //     off = 0;
+            // }
+            // hrand.copy_from_slice(&randpool[off..off+size_of::<HASH>()]);
+            // off += size_of::<HASH>();
 
             match method {
                 0 => {
@@ -128,7 +182,7 @@ fn go3() {
                 if queue.len() >= queue_threshold {
                     queue.hash_and_sort();
                     for i in 0..queue.len() {
-                        let key: HASH = queue.index_hash(i).try_into().unwrap();
+                        let key: HASH = queue.index_hash(i).into();
                         let result = db.find(key);
                         match result {
                             Ok(index) => {

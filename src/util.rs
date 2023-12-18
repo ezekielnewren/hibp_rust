@@ -1,11 +1,70 @@
+use std::cmp::Ordering;
 use std::collections::VecDeque;
-use std::fmt::Display;
+use std::fmt::{Display, Formatter};
 use std::mem::size_of;
 use std::ops::{Index, IndexMut, Range};
 use md4::{Digest, Md4};
+use rand::Error;
 
-pub type HASH = [u8; 16];
-pub const HASH_NULL: HASH = [0u8; 16];
+pub struct HASH([u8; 16]);
+pub const HASH_NULL: HASH = HASH([0u8; 16]);
+
+impl Clone for HASH {
+    fn clone(&self) -> Self {
+        let mut item = HASH_NULL;
+        item.0.copy_from_slice(&self.0);
+        item
+    }
+}
+
+impl Copy for HASH {}
+
+impl PartialEq<Self> for HASH {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.eq(&other.0)
+    }
+}
+
+impl PartialOrd for HASH {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.0.partial_cmp(&other.0)
+    }
+}
+
+impl Eq for HASH {
+
+}
+
+impl Ord for HASH {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.0.cmp(&other.0)
+    }
+}
+
+impl From<&[u8]> for HASH {
+    fn from(value: &[u8]) -> Self {
+        let mut item = HASH_NULL;
+        item.0.copy_from_slice(value);
+        item
+    }
+}
+
+impl From<Vec<u8>> for HASH {
+    fn from(value: Vec<u8>) -> Self {
+        value.as_slice().into()
+    }
+}
+
+impl Display for HASH {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        for byte in &(self.0) {
+            write!(f, "{:02x}", byte)?;
+        }
+
+        Ok(())
+    }
+}
+
 
 pub fn encode_to_utf16le(line: &str) -> Vec<u8> {
     return line.encode_utf16().flat_map(|v| v.to_le_bytes()).collect();
@@ -99,11 +158,12 @@ impl HashAndPassword {
 
             let mut hasher = Md4::new();
             md4::Digest::update(&mut hasher, raw);
-            let hash: HASH = hasher.finalize().into();
+            let hash: HASH = hasher.finalize().to_vec().into();
+            // let hash: HASH = HASH::try_from(hasher.finalize().to_vec()).unwrap();
 
             // update the hash
             let e_hash = self.index_hash_mut(i);
-            e_hash.copy_from_slice(&hash);
+            e_hash.copy_from_slice(&hash.0);
         }
     }
 

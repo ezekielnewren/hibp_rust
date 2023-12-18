@@ -5,6 +5,7 @@ use std::mem::size_of;
 use std::ops::{Index, IndexMut, Range};
 use md4::{Digest, Md4};
 use rand::Error;
+use ring::rand::{SecureRandom, SystemRandom};
 
 pub struct HASH([u8; 16]);
 pub const HASH_NULL: HASH = HASH([0u8; 16]);
@@ -62,6 +63,47 @@ impl Display for HASH {
         }
 
         Ok(())
+    }
+}
+
+
+pub(crate) struct RandomItemGenerator<T: Copy + for<'a> From<&'a [u8]>> {
+    rng: SystemRandom,
+    pool: Vec<u8>,
+    off: usize,
+    _marker: std::marker::PhantomData<T>,
+}
+
+impl<T: Copy + for<'a> From<&'a [u8]>> RandomItemGenerator<T> {
+    pub fn new(buffer_size: usize) -> Self {
+        let size: usize = size_of::<T>() * buffer_size;
+        Self {
+            rng: SystemRandom::new(),
+            pool: vec![0u8; size],
+            off: size,
+            _marker: std::marker::PhantomData,
+        }
+    }
+
+    pub fn next_item(&mut self) -> &T {
+        if self.off == self.pool.len() {
+            self.rng.fill(&mut self.pool.as_mut_slice()).unwrap();
+        }
+
+        unsafe {
+            let t = self.pool.as_ptr().offset(self.off as isize);
+            let ret: &T = unsafe { &*std::mem::transmute::<*const u8, *const T>(t) };
+            self.off += size_of::<T>();
+            return ret;
+        }
+    }
+}
+
+impl<T: Copy + for<'a> From<&'a [u8]>> Iterator for RandomItemGenerator<T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        Some(self.next_item().clone())
     }
 }
 

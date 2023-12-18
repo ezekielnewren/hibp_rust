@@ -22,54 +22,7 @@ use md4::digest::Update;
 use rand::{Rng};
 use ring::rand::{SecureRandom, SystemRandom};
 use crate::db::HIBPDB;
-use crate::util::{HASH, binary_search_get_range, encode_to_utf16le, HashAndPassword, HASH_NULL};
-
-
-struct RandomItemGenerator<T: for<'a> From<&'a [u8]>> {
-    rng: SystemRandom,
-    pool: Vec<u8>,
-    item_size: usize,
-    off: usize,
-    _marker: std::marker::PhantomData<T>,
-}
-
-impl<T: for<'a> From<&'a [u8]>> RandomItemGenerator<T> {
-    pub fn new(buffer_size: usize) -> Self {
-        let item_size = size_of::<T>();
-        let size: usize = (item_size * buffer_size) as usize;
-        Self {
-            rng: SystemRandom::new(),
-            pool: vec![0u8; size],
-            item_size,
-            off: size,
-            _marker: std::marker::PhantomData,
-        }
-    }
-}
-
-impl<T: for<'a> From<&'a [u8]>> Iterator for RandomItemGenerator<T> {
-    type Item = T;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.off == self.pool.len() {
-            self.rng.fill(&mut self.pool.as_mut_slice()).unwrap();
-        }
-
-        Some((&self.pool[self.off..self.off+self.item_size]).into())
-    }
-}
-
-
-
-
-
-
-
-
-
-
-
-
+use crate::util::{HASH, HASH_NULL, RandomItemGenerator, HashAndPassword};
 
 
 fn go2() {
@@ -85,10 +38,11 @@ fn go2() {
     // let mut off = randpool.len();
     
     let mut rng: RandomItemGenerator<HASH> = RandomItemGenerator::new(1000000);
+    let x: &HASH = rng.next_item();
 
-    for v in rng {
-        println!("{}", v);
-    }
+    // for v in rng {
+    //     println!("{}", v);
+    // }
 
     // let v: HASH = rng.next().unwrap();
     // let h: HASH = v.into();

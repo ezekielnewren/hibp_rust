@@ -1,8 +1,10 @@
+use std::alloc::Layout;
 use std::cmp::Ordering;
 use std::collections::VecDeque;
 use std::fmt::{Display, Formatter};
-use std::mem::size_of;
+use std::mem::{MaybeUninit, size_of, transmute};
 use std::ops::{Index, IndexMut, Range};
+use std::slice;
 use md4::{Digest, Md4};
 use rand::Error;
 use ring::rand::{SecureRandom, SystemRandom};
@@ -66,34 +68,83 @@ impl Display for HASH {
     }
 }
 
+pub struct UnsafeMemory {
+    pub ptr: *mut u8,
+    pub len: usize,
+}
 
-pub(crate) struct RandomItemGenerator<T: Copy + for<'a> From<&'a [u8]>> {
+impl UnsafeMemory {
+    pub unsafe fn new(len: usize) -> Result::<Self, String> {
+        let ptr: *mut u8 = std::alloc::alloc(Layout::array::<u8>(len).unwrap());
+        if ptr.is_null() {
+            Err(String::from("allocation failed"))?;
+        }
+        Ok(Self {ptr, len})
+    }
+
+    pub unsafe fn cast<T>(&self) -> *const T {
+        return transmute::<*mut u8, *const T>(self.ptr);
+    }
+
+    pub unsafe fn cast_mut<T>(&self) -> *mut T {
+        return transmute::<*mut u8, *mut T>(self.ptr);
+    }
+
+    pub unsafe fn at<T>(&self, index: isize) -> &T {
+        return &*self.cast::<T>().offset(index);
+    }
+
+    pub unsafe fn at_mut<T>(&self, index: isize) -> &mut T {
+        return &mut *self.cast_mut::<T>().offset(index);
+    }
+
+    pub unsafe fn as_slice<T>(&self) -> &[T] {
+        return slice::from_raw_parts(self.cast::<T>(), self.len/size_of::<T>());
+    }
+
+    pub unsafe fn as_slice_mut<T>(&self) -> &mut [T] {
+        return slice::from_raw_parts_mut(self.cast_mut::<T>(), self.len/size_of::<T>());
+    }
+
+}
+
+impl Drop for UnsafeMemory {
+    fn drop(&mut self) {
+        unsafe {
+            std::alloc::dealloc(self.ptr, Layout::array::<u8>(self.len).unwrap());
+        }
+    }
+}
+
+pub struct RandomItemGenerator<T: Copy + for<'a> From<&'a [u8]>> {
     rng: SystemRandom,
-    pool: Vec<u8>,
+    pool: UnsafeMemory,
     off: usize,
     _marker: std::marker::PhantomData<T>,
 }
 
 impl<T: Copy + for<'a> From<&'a [u8]>> RandomItemGenerator<T> {
     pub fn new(buffer_size: usize) -> Self {
-        let size: usize = size_of::<T>() * buffer_size;
+        let capacity: usize = size_of::<T>() * buffer_size;
         Self {
             rng: SystemRandom::new(),
-            pool: vec![0u8; size],
-            off: size,
+            pool: unsafe { UnsafeMemory::new(capacity) }.unwrap(),
+            off: capacity,
             _marker: std::marker::PhantomData,
         }
     }
 
     pub fn next_item(&mut self) -> &T {
-        if self.off == self.pool.len() {
-            self.rng.fill(&mut self.pool.as_mut_slice()).unwrap();
-        }
-
         unsafe {
-            let t = self.pool.as_ptr().offset(self.off as isize);
-            let ret: &T = unsafe { &*std::mem::transmute::<*const u8, *const T>(t) };
-            self.off += size_of::<T>();
+            if self.off == self.pool.len {
+                let s = self.pool.as_slice_mut::<u8>();
+                self.rng.fill(s).unwrap();
+                self.off = 0;
+            }
+
+            let item_size = size_of::<T>();
+            let ret = self.pool.at::<T>((self.off / item_size) as isize);
+            self.off += item_size;
             return ret;
         }
     }
@@ -290,3 +341,5 @@ pub fn binary_search_get_range<T: Copy + PartialOrd>(cache: &Vec<T>, range: &Ran
 
     return lo..hi;
 }
+
+fn main() {}

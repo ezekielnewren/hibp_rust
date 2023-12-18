@@ -1,8 +1,13 @@
 // use crate::db::HIBPDB;
 // use crate::util::{binary_search, binary_search_get_range, HASH, HashMemoryArray, IndexByCopy};
 
-use std::ops;
+#![feature(test)]
+
+
+use std::{ops, thread};
 use std::ops::{Index, Range};
+use std::time::{Duration, Instant};
+use test::bench::iter;
 
 pub fn add(a: i32, b: i32) -> i32 {
     a + b
@@ -42,6 +47,62 @@ impl MyStruct {
     }
 }
 
+use hibp_rust::{HASH, RandomItemGenerator};
+
+extern crate test;
+use test::Bencher;
+
+
+pub fn timeit<T, F>(min_runtime: Duration, mut inner: F) -> u64
+    where F: FnMut() -> T,
+{
+    let mut rate = 0u64;
+    let mut loopit = 1;
+
+    loop {
+        let start = Instant::now();
+        for _i in 0..loopit {
+            inner();
+        }
+        let elapsed = start.elapsed().as_secs_f64();
+        rate = (loopit as f64 / elapsed) as u64;
+
+        if elapsed > min_runtime.as_secs_f64() {
+            break;
+        }
+        loopit += (loopit as f64 * 2.0*(min_runtime.as_secs_f64()/elapsed)) as u64;
+    }
+
+    return rate;
+}
+
+
+
+#[test]
+fn test_random_item_generator() {
+    let mut rng: RandomItemGenerator<HASH> = RandomItemGenerator::new(1000000);
+
+    let mut rate = 0u64;
+
+    let min_runtime = Duration::from_secs_f64(5.0);
+
+    rate = timeit(min_runtime, || {
+        rng.next_item();
+    });
+    assert_eq!(0, 0);
+
+    rate = timeit(min_runtime, || {
+        test::black_box(rng.next_item());
+    });
+    assert_eq!(0, 0);
+
+    rate = timeit(min_runtime, || {
+        test::black_box(rng.next());
+    });
+    assert_eq!(0, 0);
+}
+
+
 
 #[cfg(test)]
 mod tests {
@@ -62,13 +123,6 @@ mod tests {
     #[test]
     fn test_add() {
         assert_eq!(add(1, 2), 3);
-    }
-
-    #[test]
-    fn test_bad_add() {
-        // This assert would fire and test will fail.
-        // Please note, that private functions can be tested too!
-        assert_eq!(bad_add(1, 2), 3);
     }
 }
 

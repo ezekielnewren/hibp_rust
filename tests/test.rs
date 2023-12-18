@@ -52,26 +52,28 @@ pub fn timeit<T, F>(min_runtime: Duration, mut inner: F) -> u64
 
 #[test]
 fn test_random_item_generator() {
-    let mut rng: RandomItemGenerator<HASH> = RandomItemGenerator::new(1000000);
+    let buff_elements = 1000000;
+    let mut rng_hash: RandomItemGenerator<HASH> = RandomItemGenerator::new(buff_elements);
+    let mut rng_array: RandomItemGenerator<[u8; 16]> = RandomItemGenerator::new(buff_elements);
 
     let mut rate = 0u64;
 
     let min_runtime = Duration::from_secs_f64(1.0);
 
     rate = timeit(min_runtime, || {
-        rng.next_item();
+        rng_array.next_item();
     });
     assert_eq!(0, 0);
 
     rate = timeit(min_runtime, || {
-        test::black_box(rng.next_item());
+        test::black_box(rng_hash.next_item());
     });
     assert_eq!(0, 0);
 
-    rate = timeit(min_runtime, || {
-        test::black_box(rng.next());
-    });
-    assert_eq!(0, 0);
+    // rate = timeit(min_runtime, || {
+    //     test::black_box(rng_hash.next());
+    // });
+    // assert_eq!(0, 0);
 }
 
 

@@ -49,7 +49,7 @@ impl HIBPDB {
         return unsafe { self.index.mmap.align_to::<HASH>().1 };
     }
 
-    pub(crate) fn find(self: &mut Self, key: HASH) -> Result<usize, usize> {
+    pub(crate) fn find(self: &mut Self, key: &HASH) -> Result<usize, usize> {
         let mut range = 0..self.index().len() as u64;
         range = binary_search_get_range(&self.index_cache, &range, &key);
         return self.index().binary_search(&key);

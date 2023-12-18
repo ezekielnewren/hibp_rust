@@ -9,64 +9,9 @@ use md4::{Digest, Md4};
 use rand::Error;
 use ring::rand::{SecureRandom, SystemRandom};
 
-pub struct HASH([u8; 16]);
-pub const HASH_NULL: HASH = HASH([0u8; 16]);
-
-impl Clone for HASH {
-    fn clone(&self) -> Self {
-        let mut item = HASH_NULL;
-        item.0.copy_from_slice(&self.0);
-        item
-    }
-}
-
-impl Copy for HASH {}
-
-impl PartialEq<Self> for HASH {
-    fn eq(&self, other: &Self) -> bool {
-        self.0.eq(&other.0)
-    }
-}
-
-impl PartialOrd for HASH {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.0.partial_cmp(&other.0)
-    }
-}
-
-impl Eq for HASH {
-
-}
-
-impl Ord for HASH {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.0.cmp(&other.0)
-    }
-}
-
-impl From<&[u8]> for HASH {
-    fn from(value: &[u8]) -> Self {
-        let mut item = HASH_NULL;
-        item.0.copy_from_slice(value);
-        item
-    }
-}
-
-impl From<Vec<u8>> for HASH {
-    fn from(value: Vec<u8>) -> Self {
-        value.as_slice().into()
-    }
-}
-
-impl Display for HASH {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        for byte in &(self.0) {
-            write!(f, "{:02x}", byte)?;
-        }
-
-        Ok(())
-    }
-}
+// pub struct HASH([u8; 16]);
+pub type HASH = [u8; 16];
+pub const HASH_NULL: HASH = [0u8; 16];
 
 pub struct UnsafeMemory {
     pub ptr: *mut u8,
@@ -116,14 +61,14 @@ impl Drop for UnsafeMemory {
     }
 }
 
-pub struct RandomItemGenerator<T: Copy + for<'a> From<&'a [u8]>> {
+pub struct RandomItemGenerator<T/*: Copy + for<'a> From<&'a [u8]>*/> {
     rng: SystemRandom,
     pool: UnsafeMemory,
     off: usize,
     _marker: std::marker::PhantomData<T>,
 }
 
-impl<T: Copy + for<'a> From<&'a [u8]>> RandomItemGenerator<T> {
+impl<T/*: Copy + for<'a> From<&'a [u8]>*/> RandomItemGenerator<T> {
     pub fn new(buffer_size: usize) -> Self {
         let capacity: usize = size_of::<T>() * buffer_size;
         Self {
@@ -150,40 +95,31 @@ impl<T: Copy + for<'a> From<&'a [u8]>> RandomItemGenerator<T> {
     }
 }
 
-impl<T: Copy + for<'a> From<&'a [u8]>> Iterator for RandomItemGenerator<T> {
-    type Item = T;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        Some(self.next_item().clone())
-    }
-}
-
-
 pub fn encode_to_utf16le(line: &str) -> Vec<u8> {
     return line.encode_utf16().flat_map(|v| v.to_le_bytes()).collect();
 }
 
 pub struct HashAndPassword {
     buff: Vec<u8>,
-    off: Vec<u64>,
-    order: Vec<u64>,
+    off: Vec<usize>,
 }
 
-impl Index<u64> for HashAndPassword {
+impl Index<usize> for HashAndPassword {
     type Output = [u8];
 
-    fn index(&self, index: u64) -> &Self::Output {
-        let range = self.range_of_index(self.order[index as usize]);
+    fn index(&self, index: usize) -> &Self::Output {
+        let range = self.range_of_index(index);
         return &self.buff[range];
     }
 }
 
-impl IndexMut<u64> for HashAndPassword {
-    fn index_mut(&mut self, index: u64) -> &mut Self::Output {
-        let range = self.range_of_index(self.order[index as usize]);
+impl IndexMut<usize> for HashAndPassword {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        let range = self.range_of_index(index);
         return &mut self.buff[range];
     }
-}
+ }
+
 
 impl HashAndPassword {
 
@@ -191,8 +127,47 @@ impl HashAndPassword {
         HashAndPassword {
             buff: Vec::new(),
             off: Vec::new(),
-            order: Vec::new(),
         }
+    }
+
+    fn range_of_index(&self, index: usize) -> Range<usize> {
+        let start = self.off[index];
+        let mut end = 0usize;
+        if ((index+1)) < self.off.len() {
+            end = self.off[(index+1) as usize];
+        } else {
+            end = self.buff.len();
+        }
+        return start..end;
+    }
+
+    pub fn index_hash(&self, index: usize) -> &HASH {
+        let t = &self[index][0..size_of::<HASH>()];
+        assert_eq!(t.len(), size_of::<HASH>());
+        unsafe {
+            return &*transmute::<*const u8, *const HASH>(t.as_ptr());
+        }
+    }
+
+    pub fn index_hash_mut(&mut self, index: usize) -> &mut HASH {
+        let mut t = &mut self[index][0..size_of::<HASH>()];
+        assert_eq!(t.len(), size_of::<HASH>());
+        unsafe {
+            let ptr = t.as_mut_ptr();
+            return &mut *transmute::<*mut u8, *mut HASH>(ptr);
+        }
+    }
+
+    pub fn index_password(&self, index: usize) -> &[u8] {
+        let e = &self[index];
+        return &e[size_of::<HASH>()..e.len()];
+    }
+
+    pub fn index_password_mut(&mut self, index: usize) -> &mut [u8] {
+        let range = self.range_of_index(index);
+        let e = &mut self.buff[range];
+        let end = e.len();
+        return &mut e[size_of::<HASH>()..end];
     }
 
     pub fn add_password(&mut self, line: &str) {
@@ -201,44 +176,13 @@ impl HashAndPassword {
         let off_old = self.buff.len();
         let add = size_of::<HASH>() + raw.len();
 
-        self.order.push(self.off.len() as u64);
-        self.off.push(self.buff.len() as u64);
+        self.off.push(self.buff.len());
         unsafe {
             self.buff.reserve(add);
             self.buff.set_len(off_old + add);
         }
         let off_password = off_old + size_of::<HASH>();
         self.buff[off_password..off_password+raw.len()].copy_from_slice(line.as_bytes());
-    }
-
-    fn range_of_index(&self, index: u64) -> Range<usize> {
-        let start = self.off[index as usize];
-        let mut end = 0u64;
-        if ((index+1) as usize) < self.off.len() {
-            end = self.off[(index+1) as usize];
-        } else {
-            end = self.buff.len() as u64;
-        }
-        return start as usize..end as usize;
-    }
-
-    pub fn index_hash_mut(&mut self, index: u64) -> &mut [u8] {
-        return &mut self[index][0..size_of::<HASH>()];
-    }
-
-    pub fn index_password_mut(&mut self, index: u64) -> &mut [u8] {
-        let e = &mut self[index];
-        let end = e.len();
-        return &mut e[size_of::<HASH>()..end];
-    }
-
-    pub fn index_hash(&self, index: u64) -> &[u8] {
-        return &self[index][0..size_of::<HASH>()];
-    }
-
-    pub fn index_password(&self, index: u64) -> &[u8] {
-        let e = &self[index];
-        return &e[size_of::<HASH>()..e.len()];
     }
 
     pub fn hash_passwords(&mut self) {
@@ -251,25 +195,25 @@ impl HashAndPassword {
 
             let mut hasher = Md4::new();
             md4::Digest::update(&mut hasher, raw);
-            let hash: HASH = hasher.finalize().to_vec().into();
+            let mut hash: &mut [u8; 16] = &mut HASH_NULL.clone();
+            hash.copy_from_slice(hasher.finalize().as_slice());
             // let hash: HASH = HASH::try_from(hasher.finalize().to_vec()).unwrap();
 
             // update the hash
             let e_hash = self.index_hash_mut(i);
-            e_hash.copy_from_slice(&hash.0);
+            e_hash.copy_from_slice(hash);
         }
     }
 
-    pub fn sort(&mut self) {
-        let mut order: Vec<u64> = self.order.clone();
+    pub fn sort(&self) -> Vec<usize> {
+        let mut order: Vec<usize> = (0..self.off.len()).collect();
         order.sort_unstable_by_key(|index| self.index_hash(*index));
-        self.order.copy_from_slice(order.as_slice());
+        return order;
     }
 
     pub fn clear(&mut self) {
         self.buff.clear();
         self.off.clear();
-        self.order.clear();
     }
 
     pub fn hash_and_sort(&mut self) {
@@ -277,8 +221,8 @@ impl HashAndPassword {
         self.sort();
     }
 
-    pub fn len(&self) -> u64 {
-        return self.off.len() as u64;
+    pub fn len(&self) -> usize {
+        return self.off.len();
     }
 
 }

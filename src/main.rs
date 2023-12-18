@@ -21,6 +21,7 @@ use hex;
 use md4::digest::Update;
 use rand::{Rng};
 use ring::rand::{SecureRandom, SystemRandom};
+use hibp_rust::UnsafeMemory;
 use crate::db::HIBPDB;
 use crate::lib::{HASH, HASH_NULL, RandomItemGenerator, HashAndPassword};
 
@@ -47,39 +48,30 @@ fn go2() {
     // let v: HASH = rng.next().unwrap();
     // let h: HASH = v.into();
 
-    let mut hrand = HASH_NULL;
-
     let mut loopit = 1;
     let mut timeit = 5.0;
 
     let method = 0;
 
-    let mut arr: Vec<HASH> = vec![HASH_NULL; db.index().len()];
-    if method == 0 {
+    // let mut arr: Vec<HASH> = vec![HASH_NULL; db.index().len()];
+    let mem = unsafe { UnsafeMemory::new(db.index().len()) }.unwrap();
+    if method == 1 {
         print!("reading in file...");
         std::io::stdout().flush().unwrap();
-        let buff = unsafe { arr.align_to_mut::<u8>().1 };
+        // let buff = unsafe { arr.align_to_mut::<u8>().1 };
+        let buff = unsafe { mem.as_slice_mut() };
         db.index.fd.read_exact(buff).unwrap();
         println!("done");
     }
 
     let mut elapsed = 0.0;
     loop {
-        let percent = 0.2;
-        let mut range: Range<u64> = 0..(db.index().len() as f64 * percent) as u64;
-        // index_slice = &index_slice[range.start as usize..range.end as usize];
         let beg = Instant::now();
         for _i in 0..loopit {
-            // if off >= randpool.len() {
-            //     rng.fill(&mut randpool).unwrap();
-            //     off = 0;
-            // }
-            // hrand.copy_from_slice(&randpool[off..off+size_of::<HASH>()]);
-            // off += size_of::<HASH>();
-
+            let hrand = rng.next_item();
             match method {
                 0 => {
-                    let _ = arr.binary_search(&hrand);
+                    let _ = unsafe { mem.as_slice::<HASH>() }.binary_search(&hrand);
                 },
                 1 => {
                     let _ = db.index().binary_search(&hrand);
@@ -136,7 +128,7 @@ fn go3() {
                 if queue.len() >= queue_threshold {
                     queue.hash_and_sort();
                     for i in 0..queue.len() {
-                        let key: HASH = queue.index_hash(i).into();
+                        let key: &HASH = queue.index_hash(i);
                         let result = db.find(key);
                         match result {
                             Ok(index) => {

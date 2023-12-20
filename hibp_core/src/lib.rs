@@ -12,8 +12,6 @@ use rand::{Error, RngCore, SeedableRng};
 
 // pub struct HASH([u8; 16]);
 pub type HASH = [u8; 16];
-pub const HASH_NULL: HASH = [0u8; 16];
-
 pub struct UnsafeMemory {
     pub ptr: *mut u8,
     pub len: usize,
@@ -205,7 +203,7 @@ impl HashAndPassword {
 
             let mut hasher = Md4::new();
             md4::Digest::update(&mut hasher, raw);
-            let mut hash: &mut [u8; 16] = &mut HASH_NULL.clone();
+            let mut hash: &mut [u8; 16] = &mut Default::default();
             hash.copy_from_slice(hasher.finalize().as_slice());
             // let hash: HASH = HASH::try_from(hasher.finalize().to_vec()).unwrap();
 

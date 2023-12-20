@@ -7,5 +7,6 @@ edition = "2021"
 
 [dependencies]
 hibp_core = {path = "../hibp_core"}
+md4 = "0.10.2"
 thousands = "0.2.0"
 rand = "0.8.5"

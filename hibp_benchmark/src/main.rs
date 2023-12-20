@@ -4,6 +4,7 @@ use std::io::Write;
 use hibp_core::*;
 
 use std::time::{Duration, Instant};
+use md4::{Digest, Md4};
 use rand::{Error, random, Rng, RngCore, SeedableRng};
 use thousands::Separable;
 // use rand::Fill;
@@ -89,18 +90,15 @@ const BUFFER_SIZE: usize = 1000;
 
 fn main() {
     let args: Vec<_> = env::args().collect();
-
+    let min_runtime = Duration::from_secs_f64(3.0);
+    let argv = &args[1..];
     let mut b = Benchmarker{job: HashMap::new()};
 
-
-
-    b.register("rng", || {
-        let mut rng = xorshift64star{
-            state: rand::random(),
-        };
+    b.register("StdRng", || {
+        let mut rng = rand::rngs::StdRng::from_entropy();
 
         return Box::new(move || {
-            rng.next();
+            rng.gen::<HASH>();
         });
     });
 
@@ -133,9 +131,22 @@ fn main() {
         });
     });
 
-    let min_runtime = Duration::from_secs_f64(3.0);
+    b.register("utf8_to_utf16", || {
+        return Box::new(move || {
+            encode_to_utf16le("");
+        });
+    });
 
-    let argv = &args[1..];
+    b.register("md4", || {
+        let raw: HASH = Default::default();
+
+        return Box::new(move || {
+            let mut hasher = Md4::new();
+            md4::Digest::update(&mut hasher, raw);
+            let mut hash: &mut [u8; 16] = &mut Default::default();
+            hash.copy_from_slice(hasher.finalize().as_slice());
+        });
+    });
 
     if argv.len() == 0 || (argv.len() >= 0 && argv[0] == "all") {
         b.run_all(min_runtime);

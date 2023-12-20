@@ -17,8 +17,11 @@ pub fn timeit<F>(min_runtime: Duration, mut inner: F) -> u64
     let total = Instant::now();
     loop {
         let start = Instant::now();
-        for _i in 0..loopit {
+        let mut _i = 0u64;
+        loop {
+            if _i >= loopit { break; }
             inner();
+            _i += 1;
         }
         let elapsed = start.elapsed().as_secs_f64();
         rate = (loopit as f64 / elapsed) as u64;

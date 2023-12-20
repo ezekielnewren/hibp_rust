@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+hibp_core = {path = "../hibp_core"}
 hex = { version = "0.4.3", features = [] }
 rand = "0.8.5"
 ring = "0.17.7"
-hibp_core = {path = "../hibp_core"}

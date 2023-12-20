@@ -87,57 +87,6 @@ impl Benchmarker {
 
 const BUFFER_SIZE: usize = 1000;
 
-
-struct xorshift64star {
-    // https://en.wikipedia.org/wiki/Xorshift#xorshift*
-    state: u64,
-}
-
-impl xorshift64star {
-    fn next(&mut self) -> u64 {
-        self.state ^= self.state >> 12;
-        self.state ^= self.state << 25;
-        self.state ^= self.state >> 27;
-        return self.state.wrapping_mul(0x2545F4914F6CDD1D);
-    }
-}
-
-impl RngCore for xorshift64star {
-    fn next_u32(&mut self) -> u32 {
-        self.next() as u32
-    }
-
-    fn next_u64(&mut self) -> u64 {
-        self.next()
-    }
-
-    fn fill_bytes(&mut self, dest: &mut [u8]) {
-        self.try_fill_bytes(dest).unwrap();
-    }
-
-    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Error> {
-        let mut off = 0usize;
-        loop {
-            if off >= dest.len() { break; }
-
-            let mut block = self.next_u64();
-
-            let mut i = 0;
-            loop {
-                if i >= 8 || off >= dest.len() { break; }
-
-                dest[off] = block as u8;
-
-                block >>= 8;
-                off += 1;
-                i += 1;
-            }
-        }
-
-        Ok(())
-    }
-}
-
 fn main() {
     let args: Vec<_> = env::args().collect();
 

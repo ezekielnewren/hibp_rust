@@ -1,4 +1,5 @@
 pub mod db;
+pub mod md4_fast;
 
 use std::alloc::Layout;
 use std::cmp::Ordering;

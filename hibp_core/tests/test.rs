@@ -3,6 +3,7 @@
 
 use std::fs;
 use std::ops::{Index, IndexMut, Range};
+use std::thread::available_parallelism;
 
 extern crate test;
 

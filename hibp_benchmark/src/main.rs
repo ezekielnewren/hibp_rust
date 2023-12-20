@@ -137,7 +137,7 @@ fn main() {
         });
     });
 
-    b.register("md4", || {
+    b.register("md4_crate", || {
         let raw: HASH = Default::default();
 
         return Box::new(move || {
@@ -145,6 +145,14 @@ fn main() {
             md4::Digest::update(&mut hasher, raw);
             let mut hash: &mut [u8; 16] = &mut Default::default();
             hash.copy_from_slice(hasher.finalize().as_slice());
+        });
+    });
+
+    b.register("md4_rosettacode", || {
+        let raw: HASH = Default::default();
+
+        return Box::new(move || {
+            md4_fast::md4(raw);
         });
     });
 

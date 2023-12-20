@@ -97,12 +97,13 @@ fn main() {
     b.register("rng bytes", || {
         let item_size = 16;
         let mut pool: Vec<u8> = vec![0u8; item_size* BUFFER_SIZE];
+        let threshold = pool.len();
         let mut off = pool.len();
 
         let rng = ring::rand::SystemRandom::new();
 
         return Box::new(move || {
-            if off == pool.len() {
+            if off == threshold {
                 rng.fill(pool.as_mut_slice()).unwrap();
                 off = 0;
             }
@@ -119,7 +120,7 @@ fn main() {
         });
     });
 
-    let min_runtime = Duration::from_secs_f64(1.0);
+    let min_runtime = Duration::from_secs_f64(3.0);
 
     let argv = &args[1..];
 

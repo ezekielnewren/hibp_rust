@@ -67,6 +67,7 @@ pub struct RandomItemGenerator<'a, T: Default + Copy> {
     rng: SystemRandom,
     pool: Vec<T>,
     memory: &'a mut [u8],
+    threshold: usize,
     off: usize,
 }
 
@@ -83,6 +84,7 @@ impl<'a, T: Default + Copy> RandomItemGenerator<'a, T> {
             rng: SystemRandom::new(),
             pool,
             memory,
+            threshold: buffer_size,
             off: buffer_size,
         }
     }
@@ -93,7 +95,7 @@ impl<'a, T: Default + Copy> RandomItemGenerator<'a, T> {
         assert_eq!(self.pool.len() * size_of::<T>(), self.memory.len());
         assert!(self.off <= self.pool.len());
 
-        if self.off == self.pool.len() {
+        if self.off == self.threshold {
             self.rng.fill(self.memory).unwrap();
             self.off = 0;
         }

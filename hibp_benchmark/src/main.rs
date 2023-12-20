@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::env;
 use std::io::Write;
 use std::rc::Rc;
 use hibp_core::*;
@@ -87,6 +88,8 @@ impl Benchmarker {
 const BUFFER_SIZE: usize = 1000;
 
 fn main() {
+    let args: Vec<_> = env::args().collect();
+
     let mut b = Benchmarker{job: HashMap::new()};
 
 
@@ -108,7 +111,7 @@ fn main() {
         })
     });
 
-    b.register("rng hash ", || {
+    b.register("rng hash", || {
         let mut rng: RandomItemGenerator<HASH> = RandomItemGenerator::new(BUFFER_SIZE);
 
         return Box::new(move || {
@@ -118,6 +121,14 @@ fn main() {
 
     let min_runtime = Duration::from_secs_f64(1.0);
 
-    b.run("rng bytes", min_runtime);
-    // b.run_all(min_runtime);
+    let argv = &args[1..];
+
+    if argv.len() == 0 || (argv.len() >= 0 && argv[0] == "all") {
+        b.run_all(min_runtime);
+    } else {
+        for i in 1..args.len() {
+            let test = &args[i];
+            b.run(test.as_str(), min_runtime);
+        }
+    }
 }

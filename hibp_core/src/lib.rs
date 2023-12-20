@@ -8,8 +8,7 @@ use std::mem::{MaybeUninit, size_of, transmute};
 use std::ops::{Index, IndexMut, Range};
 use std::slice;
 use md4::{Digest, Md4};
-use rand::Error;
-use ring::rand::{SecureRandom, SystemRandom};
+use rand::{Error, RngCore, SeedableRng};
 
 // pub struct HASH([u8; 16]);
 pub type HASH = [u8; 16];
@@ -64,7 +63,7 @@ impl Drop for UnsafeMemory {
 }
 
 pub struct RandomItemGenerator<'a, T: Default + Copy> {
-    rng: SystemRandom,
+    rng: rand::rngs::StdRng,
     pool: Vec<T>,
     memory: &'a mut [u8],
     threshold: usize,
@@ -81,7 +80,7 @@ impl<'a, T: Default + Copy> RandomItemGenerator<'a, T> {
         let memory: &mut [u8] = unsafe { slice::from_raw_parts_mut(ptr, len) };
 
         Self {
-            rng: SystemRandom::new(),
+            rng: rand::rngs::StdRng::from_entropy(),
             pool,
             memory,
             threshold: buffer_size,
@@ -96,7 +95,7 @@ impl<'a, T: Default + Copy> RandomItemGenerator<'a, T> {
         assert!(self.off <= self.pool.len());
 
         if self.off == self.threshold {
-            self.rng.fill(self.memory).unwrap();
+            self.rng.fill_bytes(self.memory);
             self.off = 0;
         }
 

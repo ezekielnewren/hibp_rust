@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 use std::env;
 use std::io::Write;
-use std::rc::Rc;
 use hibp_core::*;
 
 use std::time::{Duration, Instant};
-use ring::rand::SecureRandom;
+use rand::{Error, random, Rng, RngCore, SeedableRng};
 use thousands::Separable;
+// use rand::Fill;
 
 
 pub fn timeit<F>(min_runtime: Duration, mut inner: F) -> u64
@@ -32,7 +32,7 @@ pub fn timeit<F>(min_runtime: Duration, mut inner: F) -> u64
         } else if total.elapsed().as_secs_f64() > 2.0*min_runtime.as_secs_f64() {
             break;
         }
-        loopit = (1.2*min_runtime.as_secs_f64()/elapsed) as u64;
+        loopit = (min_runtime.as_secs_f64()/elapsed) as u64;
     }
 
     return rate;
@@ -87,6 +87,57 @@ impl Benchmarker {
 
 const BUFFER_SIZE: usize = 1000;
 
+
+struct xorshift64star {
+    // https://en.wikipedia.org/wiki/Xorshift#xorshift*
+    state: u64,
+}
+
+impl xorshift64star {
+    fn next(&mut self) -> u64 {
+        self.state ^= self.state >> 12;
+        self.state ^= self.state << 25;
+        self.state ^= self.state >> 27;
+        return self.state.wrapping_mul(0x2545F4914F6CDD1D);
+    }
+}
+
+impl RngCore for xorshift64star {
+    fn next_u32(&mut self) -> u32 {
+        self.next() as u32
+    }
+
+    fn next_u64(&mut self) -> u64 {
+        self.next()
+    }
+
+    fn fill_bytes(&mut self, dest: &mut [u8]) {
+        self.try_fill_bytes(dest).unwrap();
+    }
+
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Error> {
+        let mut off = 0usize;
+        loop {
+            if off >= dest.len() { break; }
+
+            let mut block = self.next_u64();
+
+            let mut i = 0;
+            loop {
+                if i >= 8 || off >= dest.len() { break; }
+
+                dest[off] = block as u8;
+
+                block >>= 8;
+                off += 1;
+                i += 1;
+            }
+        }
+
+        Ok(())
+    }
+}
+
 fn main() {
     let args: Vec<_> = env::args().collect();
 
@@ -94,17 +145,30 @@ fn main() {
 
 
 
+    b.register("rng", || {
+        let mut rng = xorshift64star{
+            state: rand::random(),
+        };
+
+        return Box::new(move || {
+            rng.next();
+        });
+    });
+
     b.register("rng bytes", || {
         let item_size = 16;
         let mut pool: Vec<u8> = vec![0u8; item_size* BUFFER_SIZE];
         let threshold = pool.len();
         let mut off = pool.len();
 
-        let rng = ring::rand::SystemRandom::new();
+        // let mut rng = rand::rngs::OsRng::default();
+        let mut rng = rand::rngs::StdRng::from_entropy();
+        // let mut rng = xorshift64star{state: random()};
+
 
         return Box::new(move || {
             if off == threshold {
-                rng.fill(pool.as_mut_slice()).unwrap();
+                rng.fill_bytes(pool.as_mut_slice());
                 off = 0;
             }
 

@@ -1,10 +1,13 @@
+use std::io::Write;
+use std::rc::Rc;
 use hibp_core::*;
 
 use std::time::{Duration, Instant};
 use thousands::Separable;
 
-pub fn timeit<T, F>(min_runtime: Duration, mut inner: F) -> u64
-    where F: FnMut() -> T,
+
+pub fn timeit<F>(min_runtime: Duration, mut inner: F) -> u64
+    where F: FnMut(),
 {
     let mut rate = 0u64;
     let mut loopit = 1;
@@ -29,17 +32,53 @@ pub fn timeit<T, F>(min_runtime: Duration, mut inner: F) -> u64
     return rate;
 }
 
+struct BenchmarkJob {
+    name: String,
+    func: Box<dyn FnMut() -> Box<dyn FnMut()>>,
+}
+struct Benchmarker {
+    job: Vec<BenchmarkJob>,
+}
+
+impl Benchmarker {
+
+    fn register<F>(&mut self, name: &str, closure: F)
+    where
+        F: FnMut() -> Box<dyn FnMut()> + 'static,
+    {
+        let job = BenchmarkJob {
+            name: String::from(name),
+            func: Box::new(closure),
+        };
+
+        self.job.push(job);
+    }
+
+    fn run_all(&mut self, min_runtime: Duration) {
+        for i in 0..self.job.len() {
+            let job = &mut self.job[i];
+
+            print!("{}: ", job.name);
+            std::io::stdout().flush().unwrap();
+            let inner = (job.func)();
+            let rate = timeit(min_runtime, inner);
+            println!("{}", rate.separate_with_commas());
+        }
+    }
+}
+
 
 fn main() {
+    let mut b = Benchmarker{job: Vec::new()};
 
-    let mut rng: RandomItemGenerator<HASH> = RandomItemGenerator::new(1000000);
-    let min_runtime = Duration::from_secs_f64(3.0);
-    let mut rate: u64 = 0;
+    b.register("rng hash", || {
+        let mut rng: RandomItemGenerator<HASH> = RandomItemGenerator::new(1000000);
 
-
-    rate = timeit(min_runtime, || {
-        rng.next_item();
+        return Box::new(move || {
+            rng.next_item();
+        });
     });
-    println!("rng hash: {}", rate.separate_with_commas());
 
+    let min_runtime = Duration::from_secs_f64(3.0);
+    b.run_all(min_runtime);
 }

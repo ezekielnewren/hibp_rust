@@ -97,6 +97,7 @@ name = "hibp_benchmark"
 version = "0.1.0"
 dependencies = [
  "hibp_core",
+ "ring",
  "thousands",
 ]
 

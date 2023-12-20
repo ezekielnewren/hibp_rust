@@ -1,8 +1,10 @@
+use std::collections::HashMap;
 use std::io::Write;
 use std::rc::Rc;
 use hibp_core::*;
 
 use std::time::{Duration, Instant};
+use ring::rand::SecureRandom;
 use thousands::Separable;
 
 
@@ -37,7 +39,7 @@ struct BenchmarkJob {
     func: Box<dyn FnMut() -> Box<dyn FnMut()>>,
 }
 struct Benchmarker {
-    job: Vec<BenchmarkJob>,
+    job: HashMap<String, BenchmarkJob>,
 }
 
 impl Benchmarker {
@@ -46,39 +48,73 @@ impl Benchmarker {
     where
         F: FnMut() -> Box<dyn FnMut()> + 'static,
     {
+        let _name = String::from(name);
+
         let job = BenchmarkJob {
-            name: String::from(name),
+            name: _name.clone(),
             func: Box::new(closure),
         };
 
-        self.job.push(job);
+        self.job.insert(_name, job);
+        // self.job.push(job.name, job);
+    }
+
+    fn run(&mut self, name: &str, min_runtime: Duration) {
+        let job: &mut BenchmarkJob = self.job.get_mut(name).unwrap();
+
+        print!("{}: ", job.name);
+        std::io::stdout().flush().unwrap();
+        let inner = (job.func)();
+        let rate = timeit(min_runtime, inner);
+        println!("{}", rate.separate_with_commas());
     }
 
     fn run_all(&mut self, min_runtime: Duration) {
-        for i in 0..self.job.len() {
-            let job = &mut self.job[i];
+        let mut job_list: Vec<String> = Vec::new();
+        for name in self.job.keys() {
+            job_list.push(name.clone());
+        }
 
-            print!("{}: ", job.name);
-            std::io::stdout().flush().unwrap();
-            let inner = (job.func)();
-            let rate = timeit(min_runtime, inner);
-            println!("{}", rate.separate_with_commas());
+        for name in job_list {
+            self.run(name.as_str(), min_runtime);
         }
     }
 }
 
+const BUFFER_SIZE: usize = 1000;
 
 fn main() {
-    let mut b = Benchmarker{job: Vec::new()};
+    let mut b = Benchmarker{job: HashMap::new()};
 
-    b.register("rng hash", || {
-        let mut rng: RandomItemGenerator<HASH> = RandomItemGenerator::new(1000000);
+
+
+    b.register("rng bytes", || {
+        let item_size = 16;
+        let mut pool: Vec<u8> = vec![0u8; item_size* BUFFER_SIZE];
+        let mut off = pool.len();
+
+        let rng = ring::rand::SystemRandom::new();
+
+        return Box::new(move || {
+            if off == pool.len() {
+                rng.fill(pool.as_mut_slice()).unwrap();
+                off = 0;
+            }
+
+            off += item_size;
+        })
+    });
+
+    b.register("rng hash ", || {
+        let mut rng: RandomItemGenerator<HASH> = RandomItemGenerator::new(BUFFER_SIZE);
 
         return Box::new(move || {
             rng.next_item();
         });
     });
 
-    let min_runtime = Duration::from_secs_f64(3.0);
-    b.run_all(min_runtime);
+    let min_runtime = Duration::from_secs_f64(1.0);
+
+    b.run("rng bytes", min_runtime);
+    // b.run_all(min_runtime);
 }

@@ -61,37 +61,44 @@ impl Drop for UnsafeMemory {
     }
 }
 
-pub struct RandomItemGenerator<T/*: Copy + for<'a> From<&'a [u8]>*/> {
+pub struct RandomItemGenerator<'a, T: Default + Copy> {
     rng: SystemRandom,
-    pool: UnsafeMemory,
+    pool: Vec<T>,
+    memory: &'a mut [u8],
     off: usize,
-    _marker: std::marker::PhantomData<T>,
 }
 
-impl<T/*: Copy + for<'a> From<&'a [u8]>*/> RandomItemGenerator<T> {
+impl<'a, T: Default + Copy> RandomItemGenerator<'a, T> {
     pub fn new(buffer_size: usize) -> Self {
-        let capacity: usize = size_of::<T>() * buffer_size;
+        let mut pool: Vec<T> = vec![Default::default(); buffer_size];
+        let slice = pool.as_mut_slice();
+        let ptr: *mut u8 = slice.as_mut_ptr() as *mut u8;
+        let len: usize = size_of::<T>()*slice.len();
+
+        let memory: &mut [u8] = unsafe { slice::from_raw_parts_mut(ptr, len) };
+
         Self {
             rng: SystemRandom::new(),
-            pool: unsafe { UnsafeMemory::new(capacity) }.unwrap(),
-            off: capacity,
-            _marker: std::marker::PhantomData,
+            pool,
+            memory,
+            off: buffer_size,
         }
     }
 
+    #[inline]
     pub fn next_item(&mut self) -> &T {
-        unsafe {
-            if self.off == self.pool.len {
-                let s = self.pool.as_slice_mut::<u8>();
-                self.rng.fill(s).unwrap();
-                self.off = 0;
-            }
+        assert_eq!(self.pool.as_ptr() as *const u8, self.memory.as_ptr());
+        assert_eq!(self.pool.len() * size_of::<T>(), self.memory.len());
+        assert!(self.off <= self.pool.len());
 
-            let item_size = size_of::<T>();
-            let ret = self.pool.at::<T>((self.off / item_size) as isize);
-            self.off += item_size;
-            return ret;
+        if self.off == self.pool.len() {
+            self.rng.fill(self.memory).unwrap();
+            self.off = 0;
         }
+
+        let t = self.off;
+        self.off += 1;
+        return &self.pool[t];
     }
 }
 

@@ -5,7 +5,7 @@
 
 
 use std::{ops, thread};
-use std::ops::{Index, Range};
+use std::ops::{Index, IndexMut, Range};
 use std::time::{Duration, Instant};
 use test::bench::iter;
 
@@ -48,8 +48,6 @@ pub fn timeit<T, F>(min_runtime: Duration, mut inner: F) -> u64
     return rate;
 }
 
-
-
 #[test]
 fn test_random_item_generator() {
     let buff_elements = 1000000;
@@ -60,13 +58,15 @@ fn test_random_item_generator() {
 
     let min_runtime = Duration::from_secs_f64(1.0);
 
+    // without explicit copy
     rate = timeit(min_runtime, || {
-        rng_array.next_item();
+        test::black_box(rng_array.next_item());
     });
     assert_eq!(0, 0);
 
+    // with explicit copy
     rate = timeit(min_runtime, || {
-        test::black_box(rng_hash.next_item());
+        test::black_box(rng_hash.next_item().clone());
     });
     assert_eq!(0, 0);
 
@@ -74,6 +74,17 @@ fn test_random_item_generator() {
     //     test::black_box(rng_hash.next());
     // });
     // assert_eq!(0, 0);
+}
+
+#[test]
+fn test_random_item_generator_borrow() {
+    let buff_elements = 1;
+    let mut rng: RandomItemGenerator<HASH> = RandomItemGenerator::new(buff_elements);
+
+    let a = rng.next_item().clone();
+    let b = rng.next_item().clone();
+
+    assert_ne!(a, b);
 }
 
 

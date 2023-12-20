@@ -12,12 +12,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "benchmarking"
-version = "0.4.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32842502e72b27b30b2681692d16bf47a8a375c5a2795613f0dc699bed9a48bb"
-
-[[package]]
 name = "block-buffer"
 version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -89,10 +83,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
-name = "hibp_rust"
+name = "hibp"
 version = "0.1.0"
 dependencies = [
- "benchmarking",
+ "hex",
+ "hibp_core",
+ "rand",
+ "ring",
+]
+
+[[package]]
+name = "hibp_benchmark"
+version = "0.1.0"
+
+[[package]]
+name = "hibp_core"
+version = "0.1.0"
+dependencies = [
  "hex",
  "libc",
  "md4",
@@ -125,9 +132,9 @@ checksum = "f665ee40bc4a3c5590afb1e9677db74a508659dfd71e126420da8274909a0167"
 
 [[package]]
 name = "memmap2"
-version = "0.9.2"
+version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39a69c7c189ae418f83003da62820aca28d15a07725ce51fb924999335d622ff"
+checksum = "45fd3a57831bf88bc63f8cebc0cf956116276e97fef3966103e96416209f7c92"
 dependencies = [
  "libc",
 ]

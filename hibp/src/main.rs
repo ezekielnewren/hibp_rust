@@ -1,30 +1,11 @@
-extern crate core;
-
-mod lib;
-mod error;
-mod bufferedio;
-mod db;
-mod md4_fast;
-
-use md4::{Digest, Md4};
 use std::{env, io};
-use std::any::Any;
-// use std::array::IntoIter;
-use core::option::IntoIter;
 use std::io::{BufReader, prelude::*};
-use std::mem::{size_of};
 use std::ops::{Index, Range};
-use std::str::Utf8Error;
 use std::time::Instant;
 
 use hex;
-use md4::digest::Update;
-use rand::{Rng};
-use ring::rand::{SecureRandom, SystemRandom};
-use hibp_rust::UnsafeMemory;
-use crate::db::HIBPDB;
-use crate::lib::{HASH, HASH_NULL, RandomItemGenerator, HashAndPassword};
-
+use hibp_core::db::HIBPDB;
+use hibp_core::*;
 
 fn go2() {
 
@@ -32,28 +13,13 @@ fn go2() {
 
     let mut db = HIBPDB::new(&args[1]);
 
-
-
-    // let rng = SystemRandom::new();
-    // let mut randpool = vec![0u8; 16*1000000];
-    // let mut off = randpool.len();
-    
     let mut rng: RandomItemGenerator<HASH> = RandomItemGenerator::new(1000000);
-    let x: &HASH = rng.next_item();
-
-    // for v in rng {
-    //     println!("{}", v);
-    // }
-
-    // let v: HASH = rng.next().unwrap();
-    // let h: HASH = v.into();
 
     let mut loopit = 1;
     let mut timeit = 5.0;
 
     let method = 0;
 
-    // let mut arr: Vec<HASH> = vec![HASH_NULL; db.index().len()];
     let mem = unsafe { UnsafeMemory::new(db.index().len()) }.unwrap();
     if method == 1 {
         print!("reading in file...");

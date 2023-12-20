@@ -1,3 +1,5 @@
+pub mod db;
+
 use std::alloc::Layout;
 use std::cmp::Ordering;
 use std::collections::VecDeque;

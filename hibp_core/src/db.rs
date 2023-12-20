@@ -2,7 +2,8 @@ use std::cmp::min;
 use std::fs::File;
 use std::mem::size_of;
 use memmap2::{Mmap, MmapOptions};
-use crate::lib::{HASH, binary_search_generate_cache, binary_search_get_range};
+use crate::{binary_search_generate_cache, binary_search_get_range, HASH};
+// use crate::lib::{HASH, binary_search_generate_cache, binary_search_get_range};
 
 pub struct FileArray {
     pub pathname: String,
@@ -11,8 +12,8 @@ pub struct FileArray {
 }
 
 pub struct HIBPDB {
-    pub(crate) index: FileArray,
-    pub(crate) index_cache: Vec<HASH>,
+    pub index: FileArray,
+    pub index_cache: Vec<HASH>,
 }
 
 
@@ -45,11 +46,11 @@ impl HIBPDB {
         }
     }
 
-    pub(crate) fn index(self: &Self) -> &[HASH] {
+    pub fn index(self: &Self) -> &[HASH] {
         return unsafe { self.index.mmap.align_to::<HASH>().1 };
     }
 
-    pub(crate) fn find(self: &mut Self, key: &HASH) -> Result<usize, usize> {
+    pub fn find(self: &mut Self, key: &HASH) -> Result<usize, usize> {
         let mut range = 0..self.index().len() as u64;
         range = binary_search_get_range(&self.index_cache, &range, &key);
         return self.index().binary_search(&key);

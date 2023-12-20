@@ -19,10 +19,11 @@ fn bad_add(a: i32, b: i32) -> i32 {
 }
 
 
-use hibp_rust::{HASH, RandomItemGenerator};
+// use hibp_rust::{HASH, RandomItemGenerator};
 
 extern crate test;
 use test::Bencher;
+use hibp_core::{HASH, RandomItemGenerator};
 
 
 pub fn timeit<T, F>(min_runtime: Duration, mut inner: F) -> u64

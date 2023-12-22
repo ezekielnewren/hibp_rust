@@ -148,13 +148,13 @@ fn main() {
         });
     });
 
-    b.register("md4_rosettacode", || {
-        let raw: HASH = Default::default();
-
-        return Box::new(move || {
-            md4_fast::md4(raw);
-        });
-    });
+    // b.register("md4_rosettacode", || {
+    //     let raw: HASH = Default::default();
+    //
+    //     return Box::new(move || {
+    //         md4_fast::md4(raw);
+    //     });
+    // });
 
     if argv.len() == 0 || (argv.len() >= 0 && argv[0] == "all") {
         b.run_all(min_runtime);

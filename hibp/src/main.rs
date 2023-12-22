@@ -72,17 +72,18 @@ fn go3() {
 
     let mut db = HIBPDB::new(&args.dbdirectory);
 
+    let mut rng = RandomItemGenerator::<HASH>::new(1000);
+
     let mut stdin = BufReader::new(io::stdin());
     let mut buff: Vec<u8> = Vec::new();
-
-    let mut queue = HashAndPassword::new();
-
-    let mut found = 0u64;
-    let mut miss = 0u64;
-
-    let queue_threshold = 1;
+    let mut queue: Vec<HashAndPassword> = Vec::new();
 
     let mut linecount = 0u64;
+    let mut found = 0u64;
+    let mut invalid_utf8 = 0u64;
+    let mut miss = 0u64;
+
+    let hashit = true;
 
     let start = Instant::now();
     loop {
@@ -96,48 +97,44 @@ fn go3() {
             }
             _ => {}
         }
-        match std::str::from_utf8(buff.as_slice()) {
-            Ok(v) => {
-                let line: &str = v.trim_end_matches('\n');
-                linecount += 1;
+        if buff.len() > 0 && buff[buff.len()-1] == b'\n' {
+            buff.pop();
+        }
+        linecount += 1;
 
-                queue.add_password(line);
-                if queue.len() >= queue_threshold {
-                    queue.hash_and_sort();
-                    for i in 0..queue.len() {
-                        let key: &HASH = queue.index_hash(i);
-                        let result = db.find(key);
-                        match result {
-                            Ok(index) => {
-                                found += 1;
-                            },
-                            Err(insert_index) => {
-                                miss += 1;
-                            }
-                        }
-                    }
-                    queue.clear();
+        queue.push(HashAndPassword{
+            hash: Default::default(),
+            password: buff.clone(),
+        });
+
+        let mut t = queue.pop().unwrap();
+
+        let HASH_NULL: HASH = Default::default();
+        let key: &HASH;
+        if hashit {
+            match hash_password(&mut t) {
+                Ok(_) => {},
+                Err(_) => {
+                    invalid_utf8 += 1;
+                    continue
                 }
             }
-            Err(err) => {
-                continue;
-            }
+            key = &t.hash;
+        } else {
+            key = rng.next_item();
+            // key = &HASH_NULL;
+        }
+
+        match db.find(&key) {
+            Ok(_) => found += 1,
+            Err(_) => miss += 1,
         }
     }
 
-    queue.hash_and_sort();
-
     let seconds = start.elapsed().as_secs_f64();
     let rate = (linecount as f64 / seconds) as u64;
-
-    for i in 0..std::cmp::min(10, queue.len()) {
-        let hash = hex::encode(queue.index_hash(i));
-        let password = std::str::from_utf8(queue.index_password(i)).unwrap();
-
-        println!("{} {}", hash, password);
-    }
-
-    println!("lines: {}, found: {}, miss: {}", linecount, found, miss);
+    
+    println!("lines: {}, invalid_utf8: {}, found: {}, miss: {}", linecount, invalid_utf8, found, miss);
     println!("rate: {}", rate)
 
 

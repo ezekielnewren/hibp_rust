@@ -1,13 +1,12 @@
 pub mod db;
-pub mod md4_fast;
 
 use std::alloc::Layout;
-use std::cmp::Ordering;
 use std::collections::VecDeque;
 use std::fmt::{Display, Formatter};
 use std::mem::{MaybeUninit, size_of, transmute};
 use std::ops::{Index, IndexMut, Range};
 use std::slice;
+use std::str::Utf8Error;
 use md4::{Digest, Md4};
 use rand::{Error, RngCore, SeedableRng};
 
@@ -109,131 +108,19 @@ pub fn encode_to_utf16le(line: &str) -> Vec<u8> {
 }
 
 pub struct HashAndPassword {
-    buff: Vec<u8>,
-    off: Vec<usize>,
+    pub hash: HASH,
+    pub password: Vec<u8>,
 }
 
-impl Index<usize> for HashAndPassword {
-    type Output = [u8];
+pub fn hash_password(v: &mut HashAndPassword) -> Result<(), Utf8Error> {
+    let password: &str = std::str::from_utf8(v.password.as_slice())?;
+    let raw = encode_to_utf16le(password);
 
-    fn index(&self, index: usize) -> &Self::Output {
-        let range = self.range_of_index(index);
-        return &self.buff[range];
-    }
-}
+    let mut hasher = Md4::new();
+    hasher.update(raw);
+    v.hash = hasher.finalize().into();
 
-impl IndexMut<usize> for HashAndPassword {
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        let range = self.range_of_index(index);
-        return &mut self.buff[range];
-    }
- }
-
-
-impl HashAndPassword {
-
-    pub fn new() -> HashAndPassword {
-        HashAndPassword {
-            buff: Vec::new(),
-            off: Vec::new(),
-        }
-    }
-
-    fn range_of_index(&self, index: usize) -> Range<usize> {
-        let start = self.off[index];
-        let mut end = 0usize;
-        if ((index+1)) < self.off.len() {
-            end = self.off[(index+1) as usize];
-        } else {
-            end = self.buff.len();
-        }
-        return start..end;
-    }
-
-    pub fn index_hash(&self, index: usize) -> &HASH {
-        let t = &self[index][0..size_of::<HASH>()];
-        assert_eq!(t.len(), size_of::<HASH>());
-        unsafe {
-            return &*transmute::<*const u8, *const HASH>(t.as_ptr());
-        }
-    }
-
-    pub fn index_hash_mut(&mut self, index: usize) -> &mut HASH {
-        let mut t = &mut self[index][0..size_of::<HASH>()];
-        assert_eq!(t.len(), size_of::<HASH>());
-        unsafe {
-            let ptr = t.as_mut_ptr();
-            return &mut *transmute::<*mut u8, *mut HASH>(ptr);
-        }
-    }
-
-    pub fn index_password(&self, index: usize) -> &[u8] {
-        let e = &self[index];
-        return &e[size_of::<HASH>()..e.len()];
-    }
-
-    pub fn index_password_mut(&mut self, index: usize) -> &mut [u8] {
-        let range = self.range_of_index(index);
-        let e = &mut self.buff[range];
-        let end = e.len();
-        return &mut e[size_of::<HASH>()..end];
-    }
-
-    pub fn add_password(&mut self, line: &str) {
-        let raw = line.as_bytes();
-
-        let off_old = self.buff.len();
-        let add = size_of::<HASH>() + raw.len();
-
-        self.off.push(self.buff.len());
-        unsafe {
-            self.buff.reserve(add);
-            self.buff.set_len(off_old + add);
-        }
-        let off_password = off_old + size_of::<HASH>();
-        self.buff[off_password..off_password+raw.len()].copy_from_slice(line.as_bytes());
-    }
-
-    pub fn hash_passwords(&mut self) {
-        for i in 0..self.len() {
-            // get the password
-            let e_password = self.index_password(i);
-
-            let password: &str = std::str::from_utf8(e_password).unwrap();
-            let raw = encode_to_utf16le(password);
-
-            let mut hasher = Md4::new();
-            md4::Digest::update(&mut hasher, raw);
-            let mut hash: &mut [u8; 16] = &mut Default::default();
-            hash.copy_from_slice(hasher.finalize().as_slice());
-            // let hash: HASH = HASH::try_from(hasher.finalize().to_vec()).unwrap();
-
-            // update the hash
-            let e_hash = self.index_hash_mut(i);
-            e_hash.copy_from_slice(hash);
-        }
-    }
-
-    pub fn sort(&self) -> Vec<usize> {
-        let mut order: Vec<usize> = (0..self.off.len()).collect();
-        order.sort_unstable_by_key(|index| self.index_hash(*index));
-        return order;
-    }
-
-    pub fn clear(&mut self) {
-        self.buff.clear();
-        self.off.clear();
-    }
-
-    pub fn hash_and_sort(&mut self) {
-        self.hash_passwords();
-        self.sort();
-    }
-
-    pub fn len(&self) -> usize {
-        return self.off.len();
-    }
-
+    Ok(())
 }
 
 pub fn binary_search_generate_cache<T: Copy>(v: &[T], range: Range<u64>, cache: &mut Vec<T>, max_depth: u64) -> i64 {

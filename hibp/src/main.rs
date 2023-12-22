@@ -1,3 +1,4 @@
+use clap::Parser;
 use std::{env, io};
 use std::io::{BufReader, prelude::*};
 use std::ops::{Index, Range};
@@ -55,11 +56,21 @@ fn go2() {
     println!("{} hashes/s", rate)
 }
 
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    #[arg(short, long)]
+    dbdirectory: String,
+
+    #[arg(short, long, default_value_t = 1)]
+    count: u8,
+}
+
 fn go3() {
 
-    let args: Vec<_> = env::args().collect();
+    let args = Args::parse();
 
-    let mut db = HIBPDB::new(&args[1]);
+    let mut db = HIBPDB::new(&args.dbdirectory);
 
     let mut stdin = BufReader::new(io::stdin());
     let mut buff: Vec<u8> = Vec::new();

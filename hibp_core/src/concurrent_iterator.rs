@@ -7,33 +7,33 @@ use crate::{Job, Transform};
 use crate::thread_pool::ThreadPool;
 
 
-struct ConcurrentTransformData<In, Out> {
-    queue_in: VecDeque<In>,
-    queue_out: VecDeque<Out>,
+struct ConcurrentTransformData<From, To> {
+    queue_in: VecDeque<From>,
+    queue_out: VecDeque<To>,
     unprocessed: usize,
     open: bool,
 }
 
-pub struct ConcurrentTransform<In, Out> {
+pub struct ConcurrentTransform<From, To> {
     pool: ThreadPool,
-    data: Arc<Mutex<ConcurrentTransformData<In, Out>>>,
+    data: Arc<Mutex<ConcurrentTransformData<From, To>>>,
     signal: Arc<Condvar>,
     batch_size: usize,
 }
 
-pub trait BatchTransform<In, Out> {
-    fn add(&mut self, item: In);
+pub trait BatchTransform<From, To> {
+    fn add(&mut self, item: From);
 
-    fn take(&mut self, queue: &mut VecDeque<Out>);
+    fn take(&mut self, queue: &mut VecDeque<To>);
 
     fn close(&mut self);
 }
 
 
-impl<In: 'static, Out: 'static> ConcurrentTransform<In, Out> {
+impl<From: 'static, To: 'static> ConcurrentTransform<From, To> {
 
     pub fn new<F>(thread_count: usize, t: F) -> Self
-        where F: Fn(In) -> Option<Out> + 'static
+        where F: Fn(From) -> Option<To> + 'static
     {
         let mut it = Self {
             pool: ThreadPool::new(thread_count),
@@ -55,7 +55,7 @@ impl<In: 'static, Out: 'static> ConcurrentTransform<In, Out> {
             let transform = at.clone();
             it.pool.submit(move || {
                 loop {
-                    let element: In;
+                    let element: From;
                     {
                         let mut data = _data.lock().unwrap();
 
@@ -83,9 +83,9 @@ impl<In: 'static, Out: 'static> ConcurrentTransform<In, Out> {
     }
 }
 
-impl<In, Out> BatchTransform<In, Out> for ConcurrentTransform<In, Out> {
+impl<From, To> BatchTransform<From, To> for ConcurrentTransform<From, To> {
 
-    fn add(&mut self, item: In) {
+    fn add(&mut self, item: From) {
         let mut data = self.data.lock().unwrap();
         if !data.open {
             panic!("closed! cannot add item")
@@ -95,7 +95,7 @@ impl<In, Out> BatchTransform<In, Out> for ConcurrentTransform<In, Out> {
         data.unprocessed += 1;
     }
 
-    fn take(&mut self, queue: &mut VecDeque<Out>) {
+    fn take(&mut self, queue: &mut VecDeque<To>) {
         loop {
             let mut data = self.data.lock().unwrap();
             if data.queue_out.len() > 0 {

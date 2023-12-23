@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 use std::ops::Deref;
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Condvar, LockResult, Mutex, MutexGuard};
 use std::thread;
 use std::thread::JoinHandle;
 use crate::{Job, Transform};
@@ -23,6 +23,10 @@ pub struct ConcurrentTransform<In, Out> {
 
 
 impl<In: 'static, Out: 'static> ConcurrentTransform<In, Out> {
+
+    fn wait<'a, T>(&self, guard: MutexGuard<T>) -> MutexGuard<'a, T> {
+        self.signal.wait(guard).unwrap()
+    }
 
     pub fn new<F>(thread_count: usize, t: F) -> Self
         where F: Fn(In) -> Option<Out> + 'static
@@ -87,27 +91,17 @@ impl<In: 'static, Out: 'static> ConcurrentTransform<In, Out> {
     pub fn take(&mut self, queue: &mut VecDeque<Out>) {
         loop {
             let mut data = self.data.lock().unwrap();
-            match data.unprocessed > self.batch_size {
-                true => {
-                    let _unused = self.signal.wait(data).unwrap();
+            if data.queue_out.len() > 0 {
+                queue.extend(data.queue_out.drain(..));
+                break;
+            } else {
+                let threshold: usize = if data.open { self.batch_size } else { 0 };
+                if data.unprocessed > threshold {
+                    let _ = self.wait(data);
                     continue;
                 }
-                false => {}
+                break;
             }
-            match data.queue_out.len() {
-                0 => {
-                    match !data.open && data.unprocessed > 0 {
-                        true => {
-                            // wait for all jobs to finish
-                            let _unused = self.signal.wait(data).unwrap();
-                            continue;
-                        }
-                        false => return,
-                    }
-                },
-                _ => queue.extend(data.queue_out.drain(..)),
-            }
-            break;
         }
     }
 

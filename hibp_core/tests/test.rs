@@ -30,7 +30,7 @@ fn test_test_data_directory() {
 #[test]
 fn test_unordered_queue() {
     let thread_count = num_cpus::get();
-    let mut it: ConcurrentIterator<Vec<u8>, HashAndPassword> = ConcurrentIterator::new(thread_count, thread_count*2, Arc::new(|input| {
+    let mut it: ConcurrentIterator<Vec<u8>, HashAndPassword> = ConcurrentIterator::new(thread_count, thread_count*2, |input| {
         let mut hp = HashAndPassword {
             hash: Default::default(),
             password: input,
@@ -39,6 +39,10 @@ fn test_unordered_queue() {
         hash_password(&mut hp).unwrap();
 
         return hp;
-    }));
+    });
+
+    for hap in it {
+
+    }
 
 }

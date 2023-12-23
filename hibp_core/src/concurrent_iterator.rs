@@ -10,6 +10,7 @@ use crate::thread_pool::ThreadPool;
 struct ConcurrentIteratorData<In, Out> {
     queue_in: VecDeque<In>,
     queue_out: VecDeque<Out>,
+    open: bool,
 }
 
 pub struct ConcurrentIterator<In, Out> {
@@ -21,26 +22,31 @@ pub struct ConcurrentIterator<In, Out> {
 
 impl<In: 'static, Out: 'static> ConcurrentIterator<In, Out> {
 
-    pub fn new(thread_count: usize, output_limit: usize, t: Arc<dyn Fn(In) -> Out>) -> Self {
+    pub fn new<F>(thread_count: usize, t: F) -> Self
+        where F: Fn(In) -> Out + 'static
+    {
         let mut it = Self {
             pool: ThreadPool::new(thread_count),
             data: Arc::new(Mutex::new(ConcurrentIteratorData {
                 queue_in: VecDeque::new(),
                 queue_out: VecDeque::new(),
+                open: true,
             })),
             signal: Arc::new(Condvar::new()),
         };
 
+        let at = Arc::new(t);
+
         for i in 0..thread_count {
             let _data = it.data.clone();
             let signal = it.signal.clone();
-            let transform = t.clone();
+            let transform = at.clone();
             it.pool.submit(move || {
                 loop {
                     let mut data = _data.lock().unwrap();
 
                     let result_pop = data.queue_in.pop_front();
-                    if result_pop.is_none() || output_limit > 0 && data.queue_out.len() >= output_limit {
+                    if result_pop.is_none() {
                         let _unused = signal.wait(data).unwrap();
                         continue;
                     }
@@ -53,7 +59,33 @@ impl<In: 'static, Out: 'static> ConcurrentIterator<In, Out> {
         it
     }
 
+    pub fn push(&mut self, item: In) {
+        let data = self.data.lock().unwrap();
+
+        data.queue_in.push_back(item);
+    }
+
 }
 
+
+impl<In, Out> Iterator for ConcurrentIterator<In, Out> {
+    type Item = Out;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut result_pop;
+        loop {
+            let mut data = self.data.lock().unwrap();
+
+            result_pop = data.queue_out.pop_front();
+            if result_pop.is_none() && !data.open {
+                let _unused = self.signal.wait(data).unwrap();
+                continue;
+            }
+            break;
+        }
+
+        return result_pop;
+    }
+}
 
 

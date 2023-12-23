@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::thread::available_parallelism;
 use std::time::Duration;
 use hibp_core::{hash_password, HashAndPassword};
-use hibp_core::concurrent_iterator::ConcurrentIterator;
+use hibp_core::batch_transform::ConcurrentIterator;
 use hibp_core::thread_pool::ThreadPool;
 
 extern crate test;

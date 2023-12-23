@@ -11,7 +11,7 @@ use clap::Parser;
 use hex;
 use hibp_core::db::HIBPDB;
 use hibp_core::*;
-use hibp_core::concurrent_iterator::{BatchTransform, ConcurrentTransform};
+use hibp_core::batch_transform::{BatchTransform, ConcurrentBatchTransform};
 
 fn go2() {
 
@@ -94,7 +94,7 @@ fn go3() {
     let hashit = true;
 
     let thread_count = num_cpus::get_physical();
-    let mut transformer = ConcurrentTransform::<Vec<u8>, HashAndPassword>::new(thread_count, |v| {
+    let mut transformer = ConcurrentBatchTransform::<Vec<u8>, HashAndPassword>::new(thread_count, |v| {
         let mut out = HashAndPassword {
             hash: Default::default(),
             password: v,

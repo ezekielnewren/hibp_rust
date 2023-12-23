@@ -2,7 +2,7 @@
 
 pub mod db;
 pub mod thread_pool;
-pub mod concurrent_iterator;
+pub mod batch_transform;
 
 use std::alloc::Layout;
 use std::collections::VecDeque;

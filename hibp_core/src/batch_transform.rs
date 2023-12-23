@@ -6,21 +6,6 @@ use std::thread::JoinHandle;
 use crate::{Job, Transform};
 use crate::thread_pool::ThreadPool;
 
-
-struct ConcurrentTransformData<From, To> {
-    queue_in: VecDeque<From>,
-    queue_out: VecDeque<To>,
-    unprocessed: usize,
-    open: bool,
-}
-
-pub struct ConcurrentTransform<From, To> {
-    pool: ThreadPool,
-    data: Arc<Mutex<ConcurrentTransformData<From, To>>>,
-    signal: Arc<Condvar>,
-    batch_size: usize,
-}
-
 pub trait BatchTransform<From, To> {
     fn add(&mut self, item: From);
 
@@ -30,14 +15,28 @@ pub trait BatchTransform<From, To> {
 }
 
 
-impl<From: 'static, To: 'static> ConcurrentTransform<From, To> {
+struct ConcurrentBatchTransformData<From, To> {
+    queue_in: VecDeque<From>,
+    queue_out: VecDeque<To>,
+    unprocessed: usize,
+    open: bool,
+}
+
+pub struct ConcurrentBatchTransform<From, To> {
+    pool: ThreadPool,
+    data: Arc<Mutex<ConcurrentBatchTransformData<From, To>>>,
+    signal: Arc<Condvar>,
+    batch_size: usize,
+}
+
+impl<From: 'static, To: 'static> ConcurrentBatchTransform<From, To> {
 
     pub fn new<F>(thread_count: usize, t: F) -> Self
         where F: Fn(From) -> Option<To> + 'static
     {
         let mut it = Self {
             pool: ThreadPool::new(thread_count),
-            data: Arc::new(Mutex::new(ConcurrentTransformData {
+            data: Arc::new(Mutex::new(ConcurrentBatchTransformData {
                 queue_in: VecDeque::new(),
                 queue_out: VecDeque::new(),
                 unprocessed: 0,
@@ -83,7 +82,7 @@ impl<From: 'static, To: 'static> ConcurrentTransform<From, To> {
     }
 }
 
-impl<From, To> BatchTransform<From, To> for ConcurrentTransform<From, To> {
+impl<From, To> BatchTransform<From, To> for ConcurrentBatchTransform<From, To> {
 
     fn add(&mut self, item: From) {
         let mut data = self.data.lock().unwrap();

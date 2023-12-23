@@ -77,23 +77,13 @@ fn go3() {
 
     let mut db = HIBPDB::new(&args.dbdirectory);
 
-    let mut rng = RandomItemGenerator::<HASH>::new(1000);
-
     let mut stdin = BufReader::new(io::stdin());
     let mut buff: Vec<u8> = Vec::new();
-    let thread_count = num_cpus::get();
-
-    // let mut queue = ConcurrentQueue::bounded(thread_count*2);
-    // let mut queue: IndependentTransformConcurrentQueue<Vec<u8>, HashAndPassword> = IndependentTransformConcurrentQueue::new(thread_count);
 
     let mut linecount = 0u64;
     let mut found = 0u64;
-    let mut invalid_utf8 = 0u64;
     let mut miss = 0u64;
 
-    let hashit = true;
-
-    // let thread_count = num_cpus::get_physical();
     let mut transformer = ConcurrentBatchTransform::<Vec<u8>, HashAndPassword>::new(0, 0, |v| {
         let mut out = HashAndPassword {
             hash: Default::default(),
@@ -148,7 +138,8 @@ fn go3() {
 
     let seconds = start.elapsed().as_secs_f64();
     let rate = (linecount as f64 / seconds) as u64;
-    
+
+    let invalid_utf8 = linecount - (found + miss);
     println!("lines: {}, invalid_utf8: {}, found: {}, miss: {}", linecount, invalid_utf8, found, miss);
     println!("rate: {}", rate)
 

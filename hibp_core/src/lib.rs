@@ -1,7 +1,6 @@
 #![feature(unboxed_closures)]
 
 pub mod db;
-pub mod thread_pool;
 pub mod batch_transform;
 
 use std::alloc::Layout;

@@ -6,7 +6,7 @@ use std::ops::{Index, IndexMut, Range};
 use std::sync::Arc;
 use std::thread::available_parallelism;
 use std::time::Duration;
-use hibp_core::{HashAndPassword};
+use hibp_core::{hash_password, HashAndPassword};
 use hibp_core::concurrent_iterator::ConcurrentIterator;
 use hibp_core::thread_pool::ThreadPool;
 
@@ -29,23 +29,16 @@ fn test_test_data_directory() {
 
 #[test]
 fn test_unordered_queue() {
-
-    // let mut pool = ThreadPool::new(12);
-    // pool.submit(move || {
-    //     thread::sleep(Duration::from_secs(10));
-    // });
-    //
-    // pool.close();
-
     let thread_count = num_cpus::get();
     let mut it: ConcurrentIterator<Vec<u8>, HashAndPassword> = ConcurrentIterator::new(thread_count, thread_count*2, Arc::new(|input| {
-
-        HashAndPassword {
+        let mut hp = HashAndPassword {
             hash: Default::default(),
             password: input,
-        }
+        };
+
+        hash_password(&mut hp).unwrap();
+
+        return hp;
     }));
-
-
 
 }

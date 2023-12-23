@@ -1,12 +1,17 @@
+#![feature(unboxed_closures)]
+
 pub mod db;
+pub mod thread_pool;
 
 use std::alloc::Layout;
 use std::collections::VecDeque;
 use std::fmt::{Display, Formatter};
 use std::mem::{MaybeUninit, size_of, transmute};
 use std::ops::{Index, IndexMut, Range};
-use std::slice;
+use std::{slice, thread};
 use std::str::Utf8Error;
+
+use std::thread::JoinHandle;
 use md4::{Digest, Md4};
 use rand::{Error, RngCore, SeedableRng};
 
@@ -182,4 +187,4 @@ pub fn binary_search_get_range<T: Copy + PartialOrd>(cache: &Vec<T>, range: &Ran
     return lo..hi;
 }
 
-fn main() {}
+

@@ -1,9 +1,12 @@
-use clap::Parser;
-use std::{env, io};
+use std::{env, io, thread};
 use std::io::{BufReader, prelude::*};
 use std::ops::{Index, Range};
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+
+use concurrent_queue::{ConcurrentQueue, PushError};
+use clap::Parser;
 use hex;
 use hibp_core::db::HIBPDB;
 use hibp_core::*;
@@ -76,7 +79,10 @@ fn go3() {
 
     let mut stdin = BufReader::new(io::stdin());
     let mut buff: Vec<u8> = Vec::new();
-    let mut queue: Vec<HashAndPassword> = Vec::new();
+    let thread_count = num_cpus::get();
+
+    // let mut queue = ConcurrentQueue::bounded(thread_count*2);
+    // let mut queue: IndependentTransformConcurrentQueue<Vec<u8>, HashAndPassword> = IndependentTransformConcurrentQueue::new(thread_count);
 
     let mut linecount = 0u64;
     let mut found = 0u64;
@@ -102,33 +108,45 @@ fn go3() {
         }
         linecount += 1;
 
-        queue.push(HashAndPassword{
-            hash: Default::default(),
-            password: buff.clone(),
-        });
 
-        let mut t = queue.pop().unwrap();
+        // match queue.push(HashAndPassword{
+        //     hash: Default::default(),
+        //     password: buff.clone(),
+        // }) {
+        //     Ok(_) => {}
+        //     Err(_) => {}
+        // }
 
-        let HASH_NULL: HASH = Default::default();
-        let key: &HASH;
-        if hashit {
-            match hash_password(&mut t) {
-                Ok(_) => {},
-                Err(_) => {
-                    invalid_utf8 += 1;
-                    continue
-                }
-            }
-            key = &t.hash;
-        } else {
-            key = rng.next_item();
-            // key = &HASH_NULL;
-        }
 
-        match db.find(&key) {
-            Ok(_) => found += 1,
-            Err(_) => miss += 1,
-        }
+
+
+
+
+
+
+
+        // let mut t = queue.pop().unwrap();
+
+        // let HASH_NULL: HASH = Default::default();
+        // let key: &HASH;
+        // if hashit {
+        //     match hash_password(&mut t) {
+        //         Ok(_) => {},
+        //         Err(_) => {
+        //             invalid_utf8 += 1;
+        //             continue
+        //         }
+        //     }
+        //     key = &t.hash;
+        // } else {
+        //     key = rng.next_item();
+        //     // key = &HASH_NULL;
+        // }
+
+        // match db.find(&key) {
+        //     Ok(_) => found += 1,
+        //     Err(_) => miss += 1,
+        // }
     }
 
     let seconds = start.elapsed().as_secs_f64();

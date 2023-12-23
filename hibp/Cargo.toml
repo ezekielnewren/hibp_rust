@@ -10,3 +10,5 @@ hibp_core = {path = "../hibp_core"}
 hex = { version = "0.4.3", features = [] }
 rand = "0.8.5"
 clap = { version = "4.4.11", features = ["derive"] }
+concurrent-queue = "2.4.0"
+num_cpus = "1.16.0"

@@ -1,9 +1,12 @@
 #![feature(test)]
 
 
-use std::fs;
+use std::{fs, thread};
 use std::ops::{Index, IndexMut, Range};
 use std::thread::available_parallelism;
+use std::time::Duration;
+use hibp_core::{HashAndPassword};
+use hibp_core::thread_pool::ThreadPool;
 
 extern crate test;
 
@@ -19,4 +22,16 @@ fn test_test_data_directory() {
     assert!(result.is_ok());
 
     assert!(result.unwrap().is_dir());
+}
+
+#[test]
+fn test_unordered_queue() {
+
+    let mut pool = ThreadPool::new(12);
+    pool.submit(move || {
+        thread::sleep(Duration::from_secs(10));
+    });
+
+    pool.close();
+
 }

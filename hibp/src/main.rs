@@ -1,4 +1,5 @@
 use std::{env, io, thread};
+use std::collections::VecDeque;
 use std::io::{BufReader, prelude::*};
 use std::ops::{Index, Range};
 use std::sync::{Arc, Mutex};
@@ -10,7 +11,7 @@ use clap::Parser;
 use hex;
 use hibp_core::db::HIBPDB;
 use hibp_core::*;
-use hibp_core::concurrent_iterator::ConcurrentIterator;
+use hibp_core::concurrent_iterator::ConcurrentTransform;
 
 fn go2() {
 
@@ -93,7 +94,7 @@ fn go3() {
     let hashit = true;
 
     let thread_count = num_cpus::get_physical();
-    let mut it = ConcurrentIterator::<Vec<u8>, HashAndPassword>::new(thread_count, |v| {
+    let mut transformer = ConcurrentTransform::<Vec<u8>, HashAndPassword>::new(thread_count, |v| {
         let mut out = HashAndPassword {
             hash: Default::default(),
             password: v,
@@ -105,15 +106,18 @@ fn go3() {
         };
     });
 
-    let batch = || {
-        for v in it {
-            let key = &v.hash;
-            match db.find(key) {
+    let mut batch = |it: &mut VecDeque<HashAndPassword>| {
+        for v in it.drain(..) {
+            let key = v.hash;
+            match db.find(&key) {
                 Ok(_) => found += 1,
                 Err(_) => miss += 1,
             }
         }
+        assert!(it.is_empty())
     };
+
+    let mut batch_queue = VecDeque::<HashAndPassword>::new();
 
     let start = Instant::now();
     loop {
@@ -132,13 +136,15 @@ fn go3() {
         }
         linecount += 1;
 
-        it.add(buff.clone());
-        batch();
+        transformer.add(buff.clone());
+        transformer.take(&mut batch_queue);
+        batch(&mut batch_queue);
 
     }
 
-    it.close();
-    batch();
+    transformer.close();
+    transformer.take(&mut batch_queue);
+    batch(&mut batch_queue);
 
     let seconds = start.elapsed().as_secs_f64();
     let rate = (linecount as f64 / seconds) as u64;

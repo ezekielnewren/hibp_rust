@@ -7,28 +7,28 @@ use crate::{Job, Transform};
 use crate::thread_pool::ThreadPool;
 
 
-struct ConcurrentIteratorData<In, Out> {
+struct ConcurrentTransformData<In, Out> {
     queue_in: VecDeque<In>,
     queue_out: VecDeque<Out>,
     job_count: u64,
     open: bool,
 }
 
-pub struct ConcurrentIterator<In, Out> {
+pub struct ConcurrentTransform<In, Out> {
     pool: ThreadPool,
-    data: Arc<Mutex<ConcurrentIteratorData<In, Out>>>,
+    data: Arc<Mutex<ConcurrentTransformData<In, Out>>>,
     signal: Arc<Condvar>,
 }
 
 
-impl<In: 'static, Out: 'static> ConcurrentIterator<In, Out> {
+impl<In: 'static, Out: 'static> ConcurrentTransform<In, Out> {
 
     pub fn new<F>(thread_count: usize, t: F) -> Self
         where F: Fn(In) -> Option<Out> + 'static
     {
         let mut it = Self {
             pool: ThreadPool::new(thread_count),
-            data: Arc::new(Mutex::new(ConcurrentIteratorData {
+            data: Arc::new(Mutex::new(ConcurrentTransformData {
                 queue_in: VecDeque::new(),
                 queue_out: VecDeque::new(),
                 job_count: 0,
@@ -62,6 +62,7 @@ impl<In: 'static, Out: 'static> ConcurrentIterator<In, Out> {
                         Some(v) => {
                             let mut data = _data.lock().unwrap();
                             data.queue_out.push_back(v);
+                            data.job_count -= 1;
                         }
                     }
                 }
@@ -81,37 +82,29 @@ impl<In: 'static, Out: 'static> ConcurrentIterator<In, Out> {
         data.job_count += 1;
     }
 
+    pub fn take(&mut self, queue: &mut VecDeque<Out>) {
+        loop {
+            let mut data = self.data.lock().unwrap();
+            match data.queue_out.len() {
+                0 => {
+                    match !data.open && data.job_count > 0 {
+                        true => {
+                            // wait for all jobs to finish
+                            let _unused = self.signal.wait(data).unwrap();
+                            continue;
+                        }
+                        false => return,
+                    }
+                },
+                _ => queue.extend(data.queue_out.drain(..)),
+            }
+            break;
+        }
+    }
+
     pub fn close(&mut self) {
         let mut data = self.data.lock().unwrap();
         data.open = false;
-    }
-
-}
-
-
-impl<In, Out> Iterator for ConcurrentIterator<In, Out> {
-    type Item = Out;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let mut result_pop: Option<Self::Item>;
-        loop {
-            let mut data = self.data.lock().unwrap();
-            result_pop = data.queue_out.pop_front();
-            match result_pop {
-                None => {
-                    match !data.open && data.job_count > 0 {
-                        true => {
-                            let _unused = self.signal.wait(data).unwrap();
-                            continue
-                        },
-                        false => break,
-                    }
-                }
-                Some(_) => break,
-            }
-        }
-
-        return result_pop;
     }
 }
 

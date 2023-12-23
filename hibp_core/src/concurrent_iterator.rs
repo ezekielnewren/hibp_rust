@@ -10,7 +10,7 @@ use crate::thread_pool::ThreadPool;
 struct ConcurrentTransformData<In, Out> {
     queue_in: VecDeque<In>,
     queue_out: VecDeque<Out>,
-    job_count: u64,
+    unprocessed: usize,
     open: bool,
 }
 
@@ -18,6 +18,7 @@ pub struct ConcurrentTransform<In, Out> {
     pool: ThreadPool,
     data: Arc<Mutex<ConcurrentTransformData<In, Out>>>,
     signal: Arc<Condvar>,
+    batch_size: usize,
 }
 
 
@@ -31,10 +32,11 @@ impl<In: 'static, Out: 'static> ConcurrentTransform<In, Out> {
             data: Arc::new(Mutex::new(ConcurrentTransformData {
                 queue_in: VecDeque::new(),
                 queue_out: VecDeque::new(),
-                job_count: 0,
+                unprocessed: 0,
                 open: true,
             })),
             signal: Arc::new(Condvar::new()),
+            batch_size: thread_count,
         };
 
         let at = Arc::new(t);
@@ -62,7 +64,7 @@ impl<In: 'static, Out: 'static> ConcurrentTransform<In, Out> {
                         Some(v) => {
                             let mut data = _data.lock().unwrap();
                             data.queue_out.push_back(v);
-                            data.job_count -= 1;
+                            data.unprocessed -= 1;
                         }
                     }
                 }
@@ -79,15 +81,22 @@ impl<In: 'static, Out: 'static> ConcurrentTransform<In, Out> {
         }
 
         data.queue_in.push_back(item);
-        data.job_count += 1;
+        data.unprocessed += 1;
     }
 
     pub fn take(&mut self, queue: &mut VecDeque<Out>) {
         loop {
             let mut data = self.data.lock().unwrap();
+            match data.unprocessed > self.batch_size {
+                true => {
+                    let _unused = self.signal.wait(data).unwrap();
+                    continue;
+                }
+                false => {}
+            }
             match data.queue_out.len() {
                 0 => {
-                    match !data.open && data.job_count > 0 {
+                    match !data.open && data.unprocessed > 0 {
                         true => {
                             // wait for all jobs to finish
                             let _unused = self.signal.wait(data).unwrap();

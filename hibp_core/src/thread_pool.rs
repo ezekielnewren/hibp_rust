@@ -4,13 +4,13 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::thread::JoinHandle;
 
 struct Job {
-    lambda: Box<dyn Fn()>,
+    lambda: Box<dyn FnOnce()>,
 }
 
 unsafe impl Send for Job {}
 
 impl Job {
-    pub fn call_lambda(&self) {
+    pub fn call_lambda(self) {
         (self.lambda)();
     }
 }
@@ -62,7 +62,7 @@ impl ThreadPool {
         tp
     }
 
-    pub fn submit<F>(&mut self, job: F) where F: Fn() + 'static {
+    pub fn submit<F>(&mut self, job: F) where F: FnOnce() + 'static {
         let mut data = self.data.lock().unwrap();
         data.queue.push_front(Job{
             lambda: Box::new(job),

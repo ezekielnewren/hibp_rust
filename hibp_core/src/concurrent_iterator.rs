@@ -60,7 +60,7 @@ impl<In: 'static, Out: 'static> ConcurrentIterator<In, Out> {
     }
 
     pub fn push(&mut self, item: In) {
-        let data = self.data.lock().unwrap();
+        let mut data = self.data.lock().unwrap();
 
         data.queue_in.push_back(item);
     }

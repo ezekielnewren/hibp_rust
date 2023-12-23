@@ -10,6 +10,7 @@ use std::fmt::{Display, Formatter};
 use std::mem::{MaybeUninit, size_of, transmute};
 use std::ops::{Index, IndexMut, Range};
 use std::{slice, thread};
+use std::panic::UnwindSafe;
 use std::str::Utf8Error;
 
 use std::thread::JoinHandle;
@@ -20,21 +21,22 @@ use rand::{Error, RngCore, SeedableRng};
 pub type HASH = [u8; 16];
 
 pub struct Job {
-    lambda: Box<dyn FnOnce()>,
+    pub closure: Box<dyn FnOnce()>,
 }
 
 unsafe impl Send for Job {}
+impl UnwindSafe for Job {}
 
 impl Job {
 
     pub fn new<F>(job: F) -> Job where F: FnOnce() + 'static {
         Self {
-            lambda: Box::new(job),
+            closure: Box::new(job),
         }
     }
 
-    pub fn call_lambda(self) {
-        (self.lambda)();
+    pub fn invoke(self) {
+        (self.closure)();
     }
 }
 

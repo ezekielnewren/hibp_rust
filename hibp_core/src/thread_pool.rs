@@ -1,4 +1,4 @@
-use std::{thread};
+use std::{panic, thread};
 use std::collections::VecDeque;
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread::JoinHandle;
@@ -41,7 +41,9 @@ impl ThreadPool {
                         },
                         Some(xxx) => xxx,
                     };
-                    job.call_lambda();
+                    let _ = panic::catch_unwind(|| {
+                        job.invoke();
+                    });
                 }
             });
 

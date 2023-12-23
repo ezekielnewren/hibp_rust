@@ -11,7 +11,7 @@ use clap::Parser;
 use hex;
 use hibp_core::db::HIBPDB;
 use hibp_core::*;
-use hibp_core::concurrent_iterator::ConcurrentTransform;
+use hibp_core::concurrent_iterator::{BatchTransform, ConcurrentTransform};
 
 fn go2() {
 

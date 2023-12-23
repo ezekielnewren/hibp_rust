@@ -21,12 +21,16 @@ pub struct ConcurrentTransform<In, Out> {
     batch_size: usize,
 }
 
+pub trait BatchTransform<In, Out> {
+    fn add(&mut self, item: In);
+
+    fn take(&mut self, queue: &mut VecDeque<Out>);
+
+    fn close(&mut self);
+}
+
 
 impl<In: 'static, Out: 'static> ConcurrentTransform<In, Out> {
-
-    fn wait<'a, T>(&self, guard: MutexGuard<T>) -> MutexGuard<'a, T> {
-        self.signal.wait(guard).unwrap()
-    }
 
     pub fn new<F>(thread_count: usize, t: F) -> Self
         where F: Fn(In) -> Option<Out> + 'static
@@ -77,8 +81,11 @@ impl<In: 'static, Out: 'static> ConcurrentTransform<In, Out> {
 
         it
     }
+}
 
-    pub fn add(&mut self, item: In) {
+impl<In, Out> BatchTransform<In, Out> for ConcurrentTransform<In, Out> {
+
+    fn add(&mut self, item: In) {
         let mut data = self.data.lock().unwrap();
         if !data.open {
             panic!("closed! cannot add item")
@@ -88,7 +95,7 @@ impl<In: 'static, Out: 'static> ConcurrentTransform<In, Out> {
         data.unprocessed += 1;
     }
 
-    pub fn take(&mut self, queue: &mut VecDeque<Out>) {
+    fn take(&mut self, queue: &mut VecDeque<Out>) {
         loop {
             let mut data = self.data.lock().unwrap();
             if data.queue_out.len() > 0 {
@@ -97,7 +104,7 @@ impl<In: 'static, Out: 'static> ConcurrentTransform<In, Out> {
             } else {
                 let threshold: usize = if data.open { self.batch_size } else { 0 };
                 if data.unprocessed > threshold {
-                    let _ = self.wait(data);
+                    let _ = self.signal.wait(data);
                     continue;
                 }
                 break;
@@ -105,7 +112,7 @@ impl<In: 'static, Out: 'static> ConcurrentTransform<In, Out> {
         }
     }
 
-    pub fn close(&mut self) {
+    fn close(&mut self) {
         let mut data = self.data.lock().unwrap();
         data.open = false;
     }

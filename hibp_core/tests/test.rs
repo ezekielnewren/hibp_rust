@@ -3,6 +3,7 @@
 
 use std::{fs, thread};
 use std::ops::{Index, IndexMut, Range};
+use std::str::Utf8Error;
 use std::sync::Arc;
 use std::thread::available_parallelism;
 use std::time::Duration;
@@ -36,10 +37,13 @@ fn test_unordered_queue() {
             password: input,
         };
 
-        hash_password(&mut hp).unwrap();
-
-        return hp;
+        return match hash_password(&mut hp) {
+            Ok(_) => Some(hp),
+            Err(_) => None,
+        };
     });
+
+    it.close();
 
     for hap in it {
 

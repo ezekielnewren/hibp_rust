@@ -10,6 +10,7 @@ use clap::Parser;
 use hex;
 use hibp_core::db::HIBPDB;
 use hibp_core::*;
+use hibp_core::concurrent_iterator::ConcurrentIterator;
 
 fn go2() {
 
@@ -91,6 +92,29 @@ fn go3() {
 
     let hashit = true;
 
+    let thread_count = num_cpus::get_physical();
+    let mut it = ConcurrentIterator::<Vec<u8>, HashAndPassword>::new(thread_count, |v| {
+        let mut out = HashAndPassword {
+            hash: Default::default(),
+            password: v,
+        };
+
+        return match hash_password(&mut out) {
+            Ok(_) => Some(out),
+            Err(_) => None,
+        };
+    });
+
+    let batch = || {
+        for v in it {
+            let key = &v.hash;
+            match db.find(key) {
+                Ok(_) => found += 1,
+                Err(_) => miss += 1,
+            }
+        }
+    };
+
     let start = Instant::now();
     loop {
         buff.clear();
@@ -108,46 +132,13 @@ fn go3() {
         }
         linecount += 1;
 
+        it.add(buff.clone());
+        batch();
 
-        // match queue.push(HashAndPassword{
-        //     hash: Default::default(),
-        //     password: buff.clone(),
-        // }) {
-        //     Ok(_) => {}
-        //     Err(_) => {}
-        // }
-
-
-
-
-
-
-
-
-
-        // let mut t = queue.pop().unwrap();
-
-        // let HASH_NULL: HASH = Default::default();
-        // let key: &HASH;
-        // if hashit {
-        //     match hash_password(&mut t) {
-        //         Ok(_) => {},
-        //         Err(_) => {
-        //             invalid_utf8 += 1;
-        //             continue
-        //         }
-        //     }
-        //     key = &t.hash;
-        // } else {
-        //     key = rng.next_item();
-        //     // key = &HASH_NULL;
-        // }
-
-        // match db.find(&key) {
-        //     Ok(_) => found += 1,
-        //     Err(_) => miss += 1,
-        // }
     }
+
+    it.close();
+    batch();
 
     let seconds = start.elapsed().as_secs_f64();
     let rate = (linecount as f64 / seconds) as u64;

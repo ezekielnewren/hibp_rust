@@ -239,6 +239,7 @@ dependencies = [
  "libc",
  "md4",
  "memmap2",
+ "num_cpus",
  "rand",
  "regex",
 ]

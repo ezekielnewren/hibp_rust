@@ -2,18 +2,7 @@ use std::{thread};
 use std::collections::VecDeque;
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread::JoinHandle;
-
-struct Job {
-    lambda: Box<dyn FnOnce()>,
-}
-
-unsafe impl Send for Job {}
-
-impl Job {
-    pub fn call_lambda(self) {
-        (self.lambda)();
-    }
-}
+use crate::Job;
 
 struct ThreadPoolData {
     queue: VecDeque<Job>,
@@ -22,8 +11,8 @@ struct ThreadPoolData {
 
 pub struct ThreadPool {
     pool: VecDeque<JoinHandle<()>>,
-    signal: Arc<Condvar>,
     data: Arc<Mutex<ThreadPoolData>>,
+    signal: Arc<Condvar>,
 }
 
 impl ThreadPool {
@@ -31,11 +20,11 @@ impl ThreadPool {
     pub fn new(size: usize) -> Self {
         let mut tp = ThreadPool{
             pool: VecDeque::new(),
-            signal: Arc::new(Condvar::new()),
             data: Arc::new(Mutex::new(ThreadPoolData{
                 queue: VecDeque::new(),
                 open: true,
             })),
+            signal: Arc::new(Condvar::new()),
         };
 
         for _ in 0..size {
@@ -64,10 +53,7 @@ impl ThreadPool {
 
     pub fn submit<F>(&mut self, job: F) where F: FnOnce() + 'static {
         let mut data = self.data.lock().unwrap();
-        data.queue.push_front(Job{
-            lambda: Box::new(job),
-        });
-
+        data.queue.push_front(Job::new(job));
         self.signal.notify_all();
     }
 

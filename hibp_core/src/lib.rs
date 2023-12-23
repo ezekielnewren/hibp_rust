@@ -2,6 +2,7 @@
 
 pub mod db;
 pub mod thread_pool;
+pub mod concurrent_iterator;
 
 use std::alloc::Layout;
 use std::collections::VecDeque;
@@ -17,6 +18,45 @@ use rand::{Error, RngCore, SeedableRng};
 
 // pub struct HASH([u8; 16]);
 pub type HASH = [u8; 16];
+
+pub struct Job {
+    lambda: Box<dyn FnOnce()>,
+}
+
+unsafe impl Send for Job {}
+
+impl Job {
+
+    pub fn new<F>(job: F) -> Job where F: FnOnce() + 'static {
+        Self {
+            lambda: Box::new(job),
+        }
+    }
+
+    pub fn call_lambda(self) {
+        (self.lambda)();
+    }
+}
+
+pub struct Transform<From, To> {
+    lambda: Box<dyn Fn(From) -> To>,
+}
+
+unsafe impl<From, To> Send for Transform<From, To> {}
+
+impl<From, To> Transform<From, To> {
+
+    pub fn new<F>(transform: F) -> Transform<From, To> where F: Fn(From) -> To + 'static {
+        Self {
+            lambda: Box::new(transform),
+        }
+    }
+
+    pub fn call_lambda(self, item: From) -> To {
+        (self.lambda)(item)
+    }
+}
+
 pub struct UnsafeMemory {
     pub ptr: *mut u8,
     pub len: usize,

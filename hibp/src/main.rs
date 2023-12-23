@@ -93,8 +93,8 @@ fn go3() {
 
     let hashit = true;
 
-    let thread_count = num_cpus::get_physical();
-    let mut transformer = ConcurrentBatchTransform::<Vec<u8>, HashAndPassword>::new(thread_count, |v| {
+    // let thread_count = num_cpus::get_physical();
+    let mut transformer = ConcurrentBatchTransform::<Vec<u8>, HashAndPassword>::new(0, 0, |v| {
         let mut out = HashAndPassword {
             hash: Default::default(),
             password: v,

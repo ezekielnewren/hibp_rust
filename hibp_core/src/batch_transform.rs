@@ -54,9 +54,18 @@ pub struct ConcurrentBatchTransform<From, To> {
 
 impl<From: 'static, To: 'static> ConcurrentBatchTransform<From, To> {
 
-    pub fn new<F>(thread_count: usize, t: F) -> Self
+    pub fn new<F>(tc: usize, bs: usize, t: F) -> Self
         where F: Fn(From) -> Option<To> + 'static
     {
+        let mut thread_count = tc;
+        if thread_count == 0 {
+            thread_count = num_cpus::get_physical();
+        }
+        let mut batch_size = bs;
+        if bs == 0 {
+            batch_size = thread_count*2;
+        }
+
         let mut it = Self {
             pool: VecDeque::new(),
             data: Arc::new(MutexAlwaysNotifyAll::new(ConcurrentBatchTransformData {
@@ -65,7 +74,7 @@ impl<From: 'static, To: 'static> ConcurrentBatchTransform<From, To> {
                 unprocessed: 0,
                 open: true,
             })),
-            batch_size: thread_count,
+            batch_size,
         };
 
         let at = Arc::new(t);

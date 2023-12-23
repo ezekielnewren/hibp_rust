@@ -1,10 +1,34 @@
 use std::collections::VecDeque;
-use std::ops::Deref;
 use std::sync::{Arc, Condvar, LockResult, Mutex, MutexGuard};
 use std::thread;
 use std::thread::JoinHandle;
-use crate::{Job, Transform};
-use crate::thread_pool::ThreadPool;
+use crate::{Job};
+
+struct MutexAlwaysNotifyAll<T> {
+    lock: Mutex<T>,
+    signal: Condvar,
+}
+
+impl<E> MutexAlwaysNotifyAll<E> {
+
+    pub fn new(resource: E) -> Self {
+        Self {
+            lock: Mutex::<E>::new(resource),
+            signal: Condvar::new(),
+        }
+    }
+
+    pub fn lock(&self) -> LockResult<MutexGuard<'_, E>> {
+        let lr = self.lock.lock();
+        self.signal.notify_all();
+        return lr;
+    }
+
+    pub fn wait<'a, T>(&self, guard: MutexGuard<'a, T>) -> LockResult<MutexGuard<'a, T>> {
+        self.signal.wait(guard)
+    }
+
+}
 
 pub trait BatchTransform<From, To> {
     fn add(&mut self, item: From);
@@ -23,9 +47,8 @@ struct ConcurrentBatchTransformData<From, To> {
 }
 
 pub struct ConcurrentBatchTransform<From, To> {
-    pool: ThreadPool,
-    data: Arc<Mutex<ConcurrentBatchTransformData<From, To>>>,
-    signal: Arc<Condvar>,
+    pool: VecDeque<JoinHandle<()>>,
+    data: Arc<MutexAlwaysNotifyAll<ConcurrentBatchTransformData<From, To>>>,
     batch_size: usize,
 }
 
@@ -35,14 +58,13 @@ impl<From: 'static, To: 'static> ConcurrentBatchTransform<From, To> {
         where F: Fn(From) -> Option<To> + 'static
     {
         let mut it = Self {
-            pool: ThreadPool::new(thread_count),
-            data: Arc::new(Mutex::new(ConcurrentBatchTransformData {
+            pool: VecDeque::new(),
+            data: Arc::new(MutexAlwaysNotifyAll::new(ConcurrentBatchTransformData {
                 queue_in: VecDeque::new(),
                 queue_out: VecDeque::new(),
                 unprocessed: 0,
                 open: true,
             })),
-            signal: Arc::new(Condvar::new()),
             batch_size: thread_count,
         };
 
@@ -50,35 +72,55 @@ impl<From: 'static, To: 'static> ConcurrentBatchTransform<From, To> {
 
         for i in 0..thread_count {
             let _data = it.data.clone();
-            let signal = it.signal.clone();
             let transform = at.clone();
-            it.pool.submit(move || {
+
+            let job = Job::new(move || {
                 loop {
                     let element: From;
                     {
+                        // 1. get the next element to process
                         let mut data = _data.lock().unwrap();
+                        if !data.open { break; }
 
                         element = match data.queue_in.pop_front() {
                             None => {
-                                let _unused = signal.wait(data).unwrap();
+                                let _unused = _data.wait(data);
                                 continue;
                             }
                             Some(v) => v
                         }
                     }
-                    match transform(element) {
-                        None => {},
-                        Some(v) => {
-                            let mut data = _data.lock().unwrap();
-                            data.queue_out.push_back(v);
-                            data.unprocessed -= 1;
+                    // 2. process that element outside the mutex
+                    let result = transform(element);
+                    {
+                        // 3. add the result to the processed queue
+                        let mut data = _data.lock().unwrap();
+                        if result.is_some() {
+                            data.queue_out.push_back(result.unwrap());
                         }
+                        data.unprocessed -= 1;
                     }
                 }
             });
+            let handle = thread::spawn(move || {
+                job.invoke();
+            });
+            it.pool.push_back(handle);
         }
 
         it
+    }
+}
+
+impl<From, To> Drop for ConcurrentBatchTransform<From, To> {
+    fn drop(&mut self) {
+        {
+            let mut data = self.data.lock().unwrap();
+            data.open = false;
+        }
+        for handle in self.pool.drain(..) {
+            handle.join().unwrap();
+        }
     }
 }
 
@@ -97,17 +139,14 @@ impl<From, To> BatchTransform<From, To> for ConcurrentBatchTransform<From, To> {
     fn take(&mut self, queue: &mut VecDeque<To>) {
         loop {
             let mut data = self.data.lock().unwrap();
-            if data.queue_out.len() > 0 {
-                queue.extend(data.queue_out.drain(..));
-                break;
-            } else {
-                let threshold: usize = if data.open { self.batch_size } else { 0 };
-                if data.unprocessed > threshold {
-                    let _ = self.signal.wait(data);
-                    continue;
-                }
-                break;
+            let threshold: usize = if data.open { self.batch_size } else { 0 };
+            if data.unprocessed > threshold {
+                let _ = self.data.wait(data);
+                continue;
             }
+
+            queue.extend(data.queue_out.drain(..));
+            break;
         }
     }
 

@@ -107,7 +107,8 @@ fn go3() {
         assert!(it.is_empty())
     };
 
-    let mut batch_queue = VecDeque::<HashAndPassword>::new();
+    let mut batch_in = VecDeque::<Vec<u8>>::new();
+    let mut batch_out = VecDeque::<HashAndPassword>::new();
 
     let start = Instant::now();
     loop {
@@ -126,15 +127,19 @@ fn go3() {
         }
         linecount += 1;
 
-        transformer.add(buff.clone());
-        transformer.take(&mut batch_queue);
-        batch(&mut batch_queue);
+        batch_in.push_back(buff.clone());
+
+        if batch_in.len() >= transformer.get_batch_size() {
+            transformer.add(&mut batch_in);
+            transformer.take(&mut batch_out);
+            batch(&mut batch_out);
+        }
 
     }
 
     transformer.close();
-    transformer.take(&mut batch_queue);
-    batch(&mut batch_queue);
+    transformer.take(&mut batch_out);
+    batch(&mut batch_out);
 
     let seconds = start.elapsed().as_secs_f64();
     let rate = (linecount as f64 / seconds) as u64;

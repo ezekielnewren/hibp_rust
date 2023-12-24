@@ -31,7 +31,10 @@ impl<E> MutexAlwaysNotifyAll<E> {
 }
 
 pub trait BatchTransform<From, To> {
-    fn add(&mut self, item: From);
+
+    fn get_batch_size(&self) -> usize;
+
+    fn add(&mut self, queue: &mut VecDeque<From>);
 
     fn take(&mut self, queue: &mut VecDeque<To>);
 
@@ -134,21 +137,25 @@ impl<From, To> Drop for ConcurrentBatchTransform<From, To> {
 }
 
 impl<From, To> BatchTransform<From, To> for ConcurrentBatchTransform<From, To> {
+    fn get_batch_size(&self) -> usize {
+        self.batch_size
+    }
 
-    fn add(&mut self, item: From) {
+    fn add(&mut self, queue: &mut VecDeque<From>) {
         let mut data = self.data.lock().unwrap();
         if !data.open {
             panic!("closed! cannot add item")
         }
 
-        data.queue_in.push_back(item);
-        data.unprocessed += 1;
+        let len = queue.len();
+        data.queue_in.extend(queue.drain(..));
+        data.unprocessed += len;
     }
 
     fn take(&mut self, queue: &mut VecDeque<To>) {
         loop {
             let mut data = self.data.lock().unwrap();
-            let threshold: usize = if data.open { self.batch_size } else { 0 };
+            let threshold: usize = if data.open { self.pool.len()*self.batch_size } else { 0 };
             if data.unprocessed > threshold {
                 let _ = self.data.wait(data);
                 continue;

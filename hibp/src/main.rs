@@ -11,7 +11,7 @@ use clap::Parser;
 use hex;
 use hibp_core::db::HIBPDB;
 use hibp_core::*;
-use hibp_core::batch_transform::{BatchTransform, ConcurrentBatchTransform};
+use hibp_core::batch_transform::{BatchTransform, ConcurrentBatchTransform, SerialBatchTransform};
 
 fn go2() {
 
@@ -84,7 +84,9 @@ fn go3() {
     let mut found = 0u64;
     let mut miss = 0u64;
 
-    let mut transformer = ConcurrentBatchTransform::<Vec<u8>, HashAndPassword>::new(0, 0, |v| {
+    let thread_count = num_cpus::get_physical();
+
+    let cl = |v| {
         let mut out = HashAndPassword {
             hash: Default::default(),
             password: v,
@@ -94,7 +96,10 @@ fn go3() {
             Ok(_) => Some(out),
             Err(_) => None,
         };
-    });
+    };
+
+    // let mut transformer = ConcurrentBatchTransform::<Vec<u8>, HashAndPassword>::new(thread_count, 1000, cl);
+    let mut transformer = SerialBatchTransform::<Vec<u8>, HashAndPassword>::new(1, cl);
 
     let mut batch = |it: &mut VecDeque<HashAndPassword>| {
         for v in it.drain(..) {

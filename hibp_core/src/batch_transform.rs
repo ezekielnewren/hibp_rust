@@ -42,6 +42,50 @@ pub trait BatchTransform<From, To> {
 }
 
 
+pub struct SerialBatchTransform<From, To> {
+    queue_in: VecDeque<From>,
+    queue_out: VecDeque<To>,
+    transform: Box<dyn Fn(From) -> Option<To>>,
+    batch_size: usize,
+}
+
+impl<From, To> SerialBatchTransform<From, To> {
+
+    pub fn new<F>(bs: usize, t: F) -> Self
+        where F: Fn(From) -> Option<To> + 'static
+    {
+        Self {
+            queue_in: VecDeque::new(),
+            queue_out: VecDeque::new(),
+            transform: Box::new(t),
+            batch_size: if bs == 0 { 1 } else { bs },
+        }
+    }
+
+}
+
+impl<From, To> BatchTransform<From, To> for SerialBatchTransform<From, To> {
+    fn get_batch_size(&self) -> usize {
+        self.batch_size
+    }
+
+    fn add(&mut self, queue: &mut VecDeque<From>) {
+        self.queue_in.extend(queue.drain(..));
+    }
+
+    fn take(&mut self, queue: &mut VecDeque<To>) {
+        for from in self.queue_in.drain(..) {
+            let to = (self.transform)(from);
+            if to.is_none() { continue; }
+            queue.push_back(to.unwrap());
+        }
+    }
+
+    fn close(&mut self) {
+        // this function has no effect
+    }
+}
+
 struct ConcurrentBatchTransformData<From, To> {
     queue_in: VecDeque<From>,
     queue_out: VecDeque<To>,

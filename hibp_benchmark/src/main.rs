@@ -7,6 +7,8 @@ use std::time::{Duration, Instant};
 use md4::{Digest, Md4};
 use rand::{Error, random, Rng, RngCore, SeedableRng};
 use thousands::Separable;
+use clap::Parser;
+use hibp_core::db::HIBPDB;
 // use rand::Fill;
 
 
@@ -39,19 +41,30 @@ pub fn timeit<F>(min_runtime: Duration, mut inner: F) -> u64
     return rate;
 }
 
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    #[arg(short, long)]
+    dbdirectory: String,
+
+    benchmark: Vec<String>,
+}
+
+
 struct BenchmarkJob {
     name: String,
-    func: Box<dyn FnMut() -> Box<dyn FnMut()>>,
+    func: Box<dyn Fn(&Args) -> Box<dyn FnMut()>>,
 }
 struct Benchmarker {
     job: HashMap<String, BenchmarkJob>,
+    args: Args,
 }
 
 impl Benchmarker {
 
     fn register<F>(&mut self, name: &str, closure: F)
     where
-        F: FnMut() -> Box<dyn FnMut()> + 'static,
+        F: Fn(&Args) -> Box<dyn FnMut()> + 'static,
     {
         let _name = String::from(name);
 
@@ -65,11 +78,13 @@ impl Benchmarker {
     }
 
     fn run(&mut self, name: &str, min_runtime: Duration) {
+        let args: &Args = &self.args;
+
         let job: &mut BenchmarkJob = self.job.get_mut(name).unwrap();
 
         print!("{}: ", job.name);
         std::io::stdout().flush().unwrap();
-        let inner = (job.func)();
+        let inner = (job.func)(args);
         let rate = timeit(min_runtime, inner);
         println!("{}", rate.separate_with_commas());
     }
@@ -89,12 +104,10 @@ impl Benchmarker {
 const BUFFER_SIZE: usize = 1000;
 
 fn main() {
-    let args: Vec<_> = env::args().collect();
     let min_runtime = Duration::from_secs_f64(3.0);
-    let argv = &args[1..];
-    let mut b = Benchmarker{job: HashMap::new()};
+    let mut b = Benchmarker{job: HashMap::new(), args: Args::parse()};
 
-    b.register("StdRng", || {
+    b.register("StdRng", |args| {
         let mut rng = rand::rngs::StdRng::from_entropy();
 
         return Box::new(move || {
@@ -102,7 +115,7 @@ fn main() {
         });
     });
 
-    b.register("rng bytes", || {
+    b.register("rng bytes", |args| {
         let item_size = 16;
         let mut pool: Vec<u8> = vec![0u8; item_size* BUFFER_SIZE];
         let threshold = pool.len();
@@ -123,7 +136,7 @@ fn main() {
         })
     });
 
-    b.register("rng hash", || {
+    b.register("rng hash", |args| {
         let mut rng: RandomItemGenerator<HASH> = RandomItemGenerator::new(BUFFER_SIZE);
 
         return Box::new(move || {
@@ -131,13 +144,13 @@ fn main() {
         });
     });
 
-    b.register("utf8_to_utf16", || {
+    b.register("utf8_to_utf16", |args| {
         return Box::new(move || {
             encode_to_utf16le("");
         });
     });
 
-    b.register("md4_crate", || {
+    b.register("md4_crate", |args| {
         let raw: HASH = Default::default();
 
         return Box::new(move || {
@@ -148,20 +161,32 @@ fn main() {
         });
     });
 
-    // b.register("md4_rosettacode", || {
-    //     let raw: HASH = Default::default();
-    //
-    //     return Box::new(move || {
-    //         md4_fast::md4(raw);
-    //     });
-    // });
+    b.register("dbquery_with_mlock", |args| {
+        let mut db = HIBPDB::new(&args.dbdirectory, true);
+        let mut rng = RandomItemGenerator::new(BUFFER_SIZE);
 
-    if argv.len() == 0 || (argv.len() >= 0 && argv[0] == "all") {
+        return Box::new(move || {
+            let key = rng.next_item();
+            let _ = db.find(key);
+        })
+    });
+
+    b.register("dbquery_no_mlock", |args| {
+        let mut db = HIBPDB::new(&args.dbdirectory, false);
+        let mut rng = RandomItemGenerator::new(BUFFER_SIZE);
+
+        return Box::new(move || {
+            let key = rng.next_item();
+            let _ = db.find(key);
+        })
+    });
+
+    let args = Args::parse();
+    if args.benchmark.is_empty() {
         b.run_all(min_runtime);
     } else {
-        for i in 1..args.len() {
-            let test = &args[i];
-            b.run(test.as_str(), min_runtime);
+        for name in &args.benchmark {
+            b.run(name.as_str(), min_runtime);
         }
     }
 }

@@ -223,6 +223,7 @@ dependencies = [
 name = "hibp_benchmark"
 version = "0.1.0"
 dependencies = [
+ "clap",
  "hibp_core",
  "md4",
  "rand",

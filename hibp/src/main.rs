@@ -17,7 +17,7 @@ fn go2() {
 
     let args: Vec<_> = env::args().collect();
 
-    let mut db = HIBPDB::new(&args[1]);
+    let mut db = HIBPDB::new(&args[1], false);
 
     let mut rng: RandomItemGenerator<HASH> = RandomItemGenerator::new(1000000);
 

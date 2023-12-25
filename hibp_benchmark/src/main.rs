@@ -1,6 +1,8 @@
+use std::cmp::min;
 use std::collections::HashMap;
 use std::env;
 use std::io::Write;
+use std::ops::Deref;
 use hibp_core::*;
 
 use std::time::{Duration, Instant};
@@ -46,6 +48,9 @@ pub fn timeit<F>(min_runtime: Duration, mut inner: F) -> u64
 struct Args {
     #[arg(short, long)]
     dbdirectory: String,
+
+    #[arg(short, long, default_value_t = 3.0)]
+    runtime: f64,
 
     benchmark: Vec<String>,
 }
@@ -104,7 +109,9 @@ impl Benchmarker {
 const BUFFER_SIZE: usize = 1000;
 
 fn main() {
-    let min_runtime = Duration::from_secs_f64(3.0);
+    let args = Args::parse();
+
+    let min_runtime = Duration::from_secs_f64(args.runtime);
     let mut b = Benchmarker{job: HashMap::new(), args: Args::parse()};
 
     b.register("StdRng", |args| {
@@ -165,6 +172,8 @@ fn main() {
         let mut db = HIBPDB::new(args.dbdirectory.clone(), true);
         let mut rng = RandomItemGenerator::new(BUFFER_SIZE);
 
+        preload(db.index.mmap.deref());
+
         return Box::new(move || {
             let key = rng.next_item();
             let _ = db.find(key);
@@ -174,6 +183,8 @@ fn main() {
     b.register("dbquery_no_mlock", |args| {
         let mut db = HIBPDB::new(args.dbdirectory.clone(), false);
         let mut rng = RandomItemGenerator::new(BUFFER_SIZE);
+
+
 
         return Box::new(move || {
             let key = rng.next_item();
@@ -217,5 +228,16 @@ fn main() {
         for name in &args.benchmark {
             b.run(name.as_str(), min_runtime);
         }
+    }
+}
+
+fn preload(arr: &[u8]) {
+    let mut buff = [0u8; 1<<16];
+
+    let mut off = 0;
+    while off < arr.len() {
+        let len = min(arr.len()-off, buff.len());
+        buff[0..len].copy_from_slice(&arr[off..off+len]);
+        off += len;
     }
 }

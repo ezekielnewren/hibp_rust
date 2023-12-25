@@ -1,6 +1,8 @@
 use std::cmp::min;
+use std::ffi::c_void;
 use std::fs::File;
 use std::mem::size_of;
+use std::ops::Deref;
 use memmap2::{Mmap, MmapOptions};
 use crate::{binary_search_generate_cache, binary_search_get_range, HASH};
 // use crate::lib::{HASH, binary_search_generate_cache, binary_search_get_range};
@@ -9,6 +11,7 @@ pub struct FileArray {
     pub pathname: String,
     pub fd: File,
     pub mmap: Mmap,
+    mlock_result: i32,
 }
 
 pub struct HIBPDB {
@@ -18,7 +21,7 @@ pub struct HIBPDB {
 
 
 impl HIBPDB {
-    pub fn new(v: &String) -> HIBPDB {
+    pub fn new(v: &String, prefer_locking: bool) -> HIBPDB {
         let dbdir = v.clone();
         let mut file_index = dbdir.clone();
         file_index.push_str("/index.bin");
@@ -27,13 +30,23 @@ impl HIBPDB {
         let fd = File::open(file_index).unwrap();
         let mmap = unsafe { MmapOptions::new().map(&fd).unwrap() };
 
-        let fa = FileArray {
+        let mut fa = FileArray {
             pathname: v.clone(),
             fd,
             mmap,
+            mlock_result: 0i32,
         };
 
         let index = unsafe { (&fa.mmap).align_to::<HASH>().1 };
+
+        if prefer_locking {
+            unsafe {
+                let ptr = fa.mmap.as_ptr() as *const c_void;
+                let flags = libc::MLOCK_ONFAULT;
+                libc::mlock2(ptr, fa.mmap.len(), flags);
+                fa.mlock_result = *libc::__errno_location();
+            }
+        }
 
         let log2 = (index.len() as f64).log2().ceil() as u64;
         let depth = min(log2/2, log2);
@@ -57,4 +70,18 @@ impl HIBPDB {
     }
 }
 
+
+impl Drop for HIBPDB {
+    fn drop(&mut self) {
+        if self.index.mlock_result == 0 {
+            unsafe {
+                let ptr = self.index.mmap.as_ptr() as *const c_void;
+                let ret = libc::munlock(ptr, self.index.mmap.len());
+                if ret != 0 {
+                    panic!("munlock returned with {}", ret)
+                }
+            }
+        }
+    }
+}
 

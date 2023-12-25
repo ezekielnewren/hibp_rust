@@ -75,7 +75,8 @@ fn go3() {
 
     let args = Args::parse();
 
-    let mut db = HIBPDB::new(&args.dbdirectory);
+    let prefer_locking = true;
+    let mut db = HIBPDB::new(&args.dbdirectory, prefer_locking);
 
     let mut stdin = BufReader::new(io::stdin());
     let mut buff: Vec<u8> = Vec::new();
@@ -98,8 +99,8 @@ fn go3() {
         };
     };
 
-    // let mut transformer = ConcurrentBatchTransform::<Vec<u8>, HashAndPassword>::new(thread_count, 1000, cl);
-    let mut transformer = SerialBatchTransform::<Vec<u8>, HashAndPassword>::new(1, cl);
+    let mut transformer = ConcurrentBatchTransform::<Vec<u8>, HashAndPassword>::new(thread_count, 1, cl);
+    // let mut transformer = SerialBatchTransform::<Vec<u8>, HashAndPassword>::new(500000, cl);
 
     let mut batch = |it: &mut VecDeque<HashAndPassword>| {
         for v in it.drain(..) {

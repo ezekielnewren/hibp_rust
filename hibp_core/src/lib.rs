@@ -1,4 +1,4 @@
-#![feature(unboxed_closures)]
+// #![feature(unboxed_closures)]
 
 pub mod db;
 pub mod batch_transform;

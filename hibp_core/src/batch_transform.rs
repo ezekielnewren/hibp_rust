@@ -175,6 +175,7 @@ impl<From, To> Drop for ConcurrentBatchTransform<From, To> {
             data.open = false;
         }
         for handle in self.pool.drain(..) {
+        // for handle in self.pool.into_iter() {
             handle.join().unwrap();
         }
     }

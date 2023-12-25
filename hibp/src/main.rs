@@ -17,7 +17,7 @@ fn go2() {
 
     let args: Vec<_> = env::args().collect();
 
-    let mut db = HIBPDB::new(&args[1], false);
+    let mut db = HIBPDB::new(args[1].clone(), false);
 
     let mut rng: RandomItemGenerator<HASH> = RandomItemGenerator::new(1000000);
 
@@ -76,7 +76,7 @@ fn go3() {
     let args = Args::parse();
 
     let prefer_locking = true;
-    let mut db = HIBPDB::new(&args.dbdirectory, prefer_locking);
+    let mut db = HIBPDB::new(args.dbdirectory, prefer_locking);
 
     let mut stdin = BufReader::new(io::stdin());
     let mut buff: Vec<u8> = Vec::new();

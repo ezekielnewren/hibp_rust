@@ -20,7 +20,7 @@ pub struct HIBPDB<'a> {
 
 
 impl<'a> HIBPDB<'a> {
-    pub fn new(v: &String, prefer_locking: bool) -> HIBPDB {
+    pub fn new(v: String, prefer_locking: bool) -> Self {
         let dbdir = v.clone();
         let mut file_index = dbdir.clone();
         file_index.push_str("/index.bin");

@@ -115,7 +115,7 @@ fn main() {
         });
     });
 
-    b.register("rng bytes", |args| {
+    b.register("rng_bytes", |args| {
         let item_size = 16;
         let mut pool: Vec<u8> = vec![0u8; item_size* BUFFER_SIZE];
         let threshold = pool.len();
@@ -136,7 +136,7 @@ fn main() {
         })
     });
 
-    b.register("rng hash", |args| {
+    b.register("rng_hash", |args| {
         let mut rng: RandomItemGenerator<HASH> = RandomItemGenerator::new(BUFFER_SIZE);
 
         return Box::new(move || {
@@ -162,7 +162,7 @@ fn main() {
     });
 
     b.register("dbquery_with_mlock", |args| {
-        let mut db = HIBPDB::new(&args.dbdirectory, true);
+        let mut db = HIBPDB::new(args.dbdirectory.clone(), true);
         let mut rng = RandomItemGenerator::new(BUFFER_SIZE);
 
         return Box::new(move || {
@@ -172,12 +172,41 @@ fn main() {
     });
 
     b.register("dbquery_no_mlock", |args| {
-        let mut db = HIBPDB::new(&args.dbdirectory, false);
+        let mut db = HIBPDB::new(args.dbdirectory.clone(), false);
         let mut rng = RandomItemGenerator::new(BUFFER_SIZE);
 
         return Box::new(move || {
             let key = rng.next_item();
             let _ = db.find(key);
+        })
+    });
+
+    b.register("dbquery_no_mlock_or_cache", |args| {
+        let mut db = HIBPDB::new(args.dbdirectory.clone(), false);
+        let mut rng = RandomItemGenerator::new(BUFFER_SIZE);
+
+        return Box::new(move || {
+            let key = rng.next_item();
+            let _ = db.index().binary_search(key);
+        })
+    });
+
+    b.register("dbquery_inmemory", |args| {
+        let mut db = HIBPDB::new(args.dbdirectory.clone(), false);
+        let mut rng = RandomItemGenerator::new(BUFFER_SIZE);
+
+        let mut index_slice: Vec<HASH> = Vec::new();
+        unsafe {
+            index_slice.reserve_exact(db.index().len());
+            index_slice.set_len(db.index().len());
+        }
+        index_slice.copy_from_slice(db.index());
+        // let index_slice = db.index().clone();
+
+        return Box::new(move || {
+            let key = rng.next_item();
+            let _ = index_slice.binary_search(key);
+            // let _ = db.find(key);
         })
     });
 

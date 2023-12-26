@@ -221,6 +221,19 @@ fn main() {
         })
     });
 
+    b.register("dbquery_interpolation_search", |args| {
+        let mut db = HIBPDB::new(args.dbdirectory.clone(), false);
+        let mut rng = RandomItemGenerator::new(BUFFER_SIZE);
+
+        // let slice = db.index();
+
+        return Box::new(move || {
+            let key = rng.next_item();
+            let slice = db.index();
+            let _ = slice.interpolation_search(key);
+        })
+    });
+
     let args = Args::parse();
     if args.benchmark.is_empty() {
         b.run_all(min_runtime);

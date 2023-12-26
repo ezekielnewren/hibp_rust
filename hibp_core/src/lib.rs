@@ -229,3 +229,52 @@ pub fn binary_search_get_range<T: Copy + PartialOrd>(cache: &Vec<T>, range: &Ran
 }
 
 
+pub trait InterpolationSearch<T> {
+    fn interpolation_search(&self, key: &T) -> Result<usize, ()>;
+}
+
+impl InterpolationSearch<HASH> for [HASH] {
+    fn interpolation_search(&self, key: &HASH) -> Result<usize, ()> {
+        let slope: u128 = u128::MAX/self.len() as u128;
+        let key_as_u128 = u128::from_be_bytes(*key);
+
+        let guess: usize = (key_as_u128/slope) as usize;
+        let mut step = 1usize;
+
+        let mut lo = 0usize;
+        let mut hi = self.len()-1;
+        let _len = self.len();
+
+
+        let mut i = guess;
+        if i < _len {
+            while i < _len && key < &self[i] {
+                lo = i;
+                i += step;
+                step <<= 1;
+            }
+            hi = i;
+        } else {
+            while key > &self[i] {
+                hi = i;
+                i -= step;
+                i = match i.checked_sub(step) {
+                    None => break,
+                    Some(v) => v,
+                };
+                step <<= 1;
+            }
+            lo = i;
+        }
+
+        if i < _len {
+            match self[lo..hi+1].binary_search(key) {
+                Ok(v) => Ok(v),
+                Err(_) => Err(()),
+            }
+        } else {
+            Err(())
+        }
+    }
+}
+

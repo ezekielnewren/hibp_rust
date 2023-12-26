@@ -192,16 +192,6 @@ fn main() {
         })
     });
 
-    b.register("dbquery_no_mlock_or_cache", |args| {
-        let mut db = HIBPDB::new(args.dbdirectory.clone(), false);
-        let mut rng = RandomItemGenerator::new(BUFFER_SIZE);
-
-        return Box::new(move || {
-            let key = rng.next_item();
-            let _ = db.index().binary_search(key);
-        })
-    });
-
     b.register("dbquery_inmemory", |args| {
         let mut db = HIBPDB::new(args.dbdirectory.clone(), false);
         let mut rng = RandomItemGenerator::new(BUFFER_SIZE);
@@ -221,14 +211,47 @@ fn main() {
         })
     });
 
-    b.register("dbquery_interpolation_search", |args| {
+    b.register("dbquery_miss_no_mlock_or_cache", |args| {
         let mut db = HIBPDB::new(args.dbdirectory.clone(), false);
         let mut rng = RandomItemGenerator::new(BUFFER_SIZE);
 
-        // let slice = db.index();
+        return Box::new(move || {
+            let key = rng.next_item();
+            let _ = db.index().binary_search(key);
+        })
+    });
+
+    b.register("dbquery_hit_no_mlock_or_cache", |args| {
+        let mut db = HIBPDB::new(args.dbdirectory.clone(), false);
+        let mut rng = RandomItemGenerator::<usize>::new(BUFFER_SIZE);
+
+        return Box::new(move || {
+            let array = db.index();
+            let index = rng.next_item()%array.len();
+            let key: &HASH = &array[index];
+            let _ = array.binary_search(key);
+        })
+    });
+
+    b.register("dbquery_miss_interpolation_search", |args| {
+        let mut db = HIBPDB::new(args.dbdirectory.clone(), false);
+        let mut rng = RandomItemGenerator::new(BUFFER_SIZE);
 
         return Box::new(move || {
             let key = rng.next_item();
+            let slice = db.index();
+            let _ = slice.interpolation_search(key);
+        })
+    });
+
+    b.register("dbquery_hit_interpolation_search", |args| {
+        let mut db = HIBPDB::new(args.dbdirectory.clone(), false);
+        let mut rng = RandomItemGenerator::<usize>::new(BUFFER_SIZE);
+
+        return Box::new(move || {
+            let array = db.index();
+            let index = rng.next_item()%array.len();
+            let key: &HASH = &array[index];
             let slice = db.index();
             let _ = slice.interpolation_search(key);
         })

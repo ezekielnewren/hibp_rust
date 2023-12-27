@@ -40,12 +40,13 @@ impl<'a> HIBPDB<'a> {
         }
     }
 
+    #[inline]
     pub fn index(self: &Self) -> &[HASH] {
         return self.index_slice;
     }
 
     pub fn find(self: &mut Self, key: &HASH) -> Result<usize, usize> {
-        self.index().binary_search(key)
+        self.index().interpolation_search(key)
     }
 
     pub fn len(&self) -> usize {

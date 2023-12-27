@@ -1,22 +1,16 @@
-// #![feature(unboxed_closures)]
-
 pub mod db;
 pub mod batch_transform;
 
-use std::alloc::Layout;
-use std::collections::VecDeque;
-use std::fmt::{Display, Formatter};
-use std::mem::{MaybeUninit, size_of, transmute};
-use std::ops::{Index, IndexMut, Range};
-use std::{slice, thread};
+use std::fmt::{Display};
+use std::mem::{size_of};
+use std::ops::{Index, IndexMut};
+use std::{slice};
 use std::panic::UnwindSafe;
 use std::str::Utf8Error;
 
-use std::thread::JoinHandle;
 use md4::{Digest, Md4};
-use rand::{Error, RngCore, SeedableRng};
+use rand::{RngCore, SeedableRng};
 
-// pub struct HASH([u8; 16]);
 pub type HASH = [u8; 16];
 
 pub fn HASH_to_hex(v: &HASH) -> String {
@@ -59,54 +53,6 @@ impl<From, To> Transform<From, To> {
 
     pub fn call_lambda(self, item: From) -> To {
         (self.lambda)(item)
-    }
-}
-
-pub struct UnsafeMemory {
-    pub ptr: *mut u8,
-    pub len: usize,
-}
-
-impl UnsafeMemory {
-    pub unsafe fn new(len: usize) -> Result::<Self, String> {
-        let ptr: *mut u8 = std::alloc::alloc(Layout::array::<u8>(len).unwrap());
-        if ptr.is_null() {
-            Err(String::from("allocation failed"))?;
-        }
-        Ok(Self {ptr, len})
-    }
-
-    pub unsafe fn cast<T>(&self) -> *const T {
-        return transmute::<*mut u8, *const T>(self.ptr);
-    }
-
-    pub unsafe fn cast_mut<T>(&self) -> *mut T {
-        return transmute::<*mut u8, *mut T>(self.ptr);
-    }
-
-    pub unsafe fn at<T>(&self, index: isize) -> &T {
-        return &*self.cast::<T>().offset(index);
-    }
-
-    pub unsafe fn at_mut<T>(&self, index: isize) -> &mut T {
-        return &mut *self.cast_mut::<T>().offset(index);
-    }
-
-    pub unsafe fn as_slice<T>(&self) -> &[T] {
-        return slice::from_raw_parts(self.cast::<T>(), self.len/size_of::<T>());
-    }
-
-    pub unsafe fn as_slice_mut<T>(&self) -> &mut [T] {
-        return slice::from_raw_parts_mut(self.cast_mut::<T>(), self.len/size_of::<T>());
-    }
-
-}
-
-impl Drop for UnsafeMemory {
-    fn drop(&mut self) {
-        unsafe {
-            std::alloc::dealloc(self.ptr, Layout::array::<u8>(self.len).unwrap());
-        }
     }
 }
 

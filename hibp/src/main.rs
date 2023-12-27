@@ -1,65 +1,13 @@
-use std::{env, io, thread};
+use std::{io};
 use std::collections::VecDeque;
 use std::io::{BufReader, prelude::*};
-use std::ops::{Index, Range};
-use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-
-use concurrent_queue::{ConcurrentQueue, PushError};
 use clap::Parser;
 use hex;
 use hibp_core::db::HIBPDB;
 use hibp_core::*;
-use hibp_core::batch_transform::{BatchTransform, ConcurrentBatchTransform, SerialBatchTransform};
-
-fn go2() {
-
-    let args: Vec<_> = env::args().collect();
-
-    let mut db = HIBPDB::new(args[1].clone());
-
-    let mut rng: RandomItemGenerator<HASH> = RandomItemGenerator::new(1000000);
-
-    let mut loopit = 1;
-    let mut timeit = 5.0;
-
-    let method = 0;
-
-    let mem = unsafe { UnsafeMemory::new(db.index().len()) }.unwrap();
-    if method == 1 {
-        print!("reading in file...");
-        std::io::stdout().flush().unwrap();
-        // let buff = unsafe { arr.align_to_mut::<u8>().1 };
-        let buff = unsafe { mem.as_slice_mut() };
-        db.index.fd.read_exact(buff).unwrap();
-        println!("done");
-    }
-
-    let mut elapsed = 0.0;
-    loop {
-        let beg = Instant::now();
-        for _i in 0..loopit {
-            let hrand = rng.next_item();
-            match method {
-                0 => {
-                    let _ = unsafe { mem.as_slice::<HASH>() }.binary_search(&hrand);
-                },
-                1 => {
-                    let _ = db.index().binary_search(&hrand);
-                },
-                _ => panic!("invalid method")
-            }
-        }
-
-        elapsed = beg.elapsed().as_secs_f64();
-        if elapsed > timeit { break; }
-        loopit += loopit*(timeit/elapsed) as u64;
-    }
-    let rate = (loopit as f64 / elapsed) as u64;
-
-    println!("{} hashes/s", rate)
-}
+use hibp_core::batch_transform::{BatchTransform, ConcurrentBatchTransform};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]

@@ -19,6 +19,14 @@ use rand::{Error, RngCore, SeedableRng};
 // pub struct HASH([u8; 16]);
 pub type HASH = [u8; 16];
 
+pub fn debug_HASH_to_hex(v: &HASH, view: &mut String) {
+    #[cfg(debug_assertions)]
+    {
+        let t = hex::encode_upper(v);
+        *view = t.clone();
+    }
+}
+
 pub struct Job {
     pub closure: Box<dyn FnOnce()>,
 }
@@ -230,11 +238,15 @@ pub fn binary_search_get_range<T: Copy + PartialOrd>(cache: &Vec<T>, range: &Ran
 
 
 pub trait InterpolationSearch<T> {
-    fn interpolation_search(&self, key: &T) -> Result<usize, ()>;
+    fn interpolation_search(&self, key: &T) -> Result<usize, usize>;
 }
 
 impl InterpolationSearch<HASH> for [HASH] {
-    fn interpolation_search(&self, key: &HASH) -> Result<usize, ()> {
+    fn interpolation_search(&self, key: &HASH) -> Result<usize, usize> {
+        let mut _key__hash = String::from("");
+        debug_HASH_to_hex(key, &mut _key__hash);
+        let mut _view_hash = String::from("");
+
         let slope: u128 = u128::MAX/self.len() as u128;
         let key_as_u128 = u128::from_be_bytes(*key);
 
@@ -245,35 +257,41 @@ impl InterpolationSearch<HASH> for [HASH] {
         let mut hi = self.len()-1;
         let _len = self.len();
 
+        debug_HASH_to_hex(&self[guess], &mut _view_hash);
 
         let mut i = guess;
-        if i < _len {
-            while i < _len && key < &self[i] {
-                lo = i;
-                i += step;
-                step <<= 1;
-            }
-            hi = i;
-        } else {
-            while key > &self[i] {
+        if key < &self[i] {
+            while key < &self[i] && i < _len {
+                debug_HASH_to_hex(&self[i], &mut _view_hash);
                 hi = i;
-                i -= step;
                 i = match i.checked_sub(step) {
                     None => break,
                     Some(v) => v,
                 };
                 step <<= 1;
             }
+            debug_HASH_to_hex(&self[i], &mut _view_hash);
             lo = i;
+        } else {
+            while key > &self[i] {
+                debug_HASH_to_hex(&self[i], &mut _view_hash);
+                lo = i;
+                i += step;
+                step <<= 1;
+            }
+            debug_HASH_to_hex(&self[i], &mut _view_hash);
+            hi = i;
         }
 
         if i < _len {
             match self[lo..hi+1].binary_search(key) {
-                Ok(v) => Ok(v),
-                Err(_) => Err(()),
+                Ok(v) => Ok(lo+v),
+                Err(v) => Err(lo+v),
             }
+        } else if i == _len {
+            Err(i)
         } else {
-            Err(())
+            Err(0)
         }
     }
 }

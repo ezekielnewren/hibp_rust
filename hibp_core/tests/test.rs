@@ -7,7 +7,7 @@ use std::str::Utf8Error;
 use std::sync::Arc;
 use std::thread::{available_parallelism, JoinHandle};
 use std::time::Duration;
-use hibp_core::{hash_password, HashAndPassword};
+use hibp_core::{HASH, hash_password, HashAndPassword};
 // use hibp_core::batch_transform::ConcurrentIterator;
 // use hibp_core::thread_pool::ThreadPool;
 
@@ -109,3 +109,41 @@ fn test_arbitrary_code_snippet() {
 
 
 }
+
+mod tests {
+    use std::env;
+    use hibp_core::db::HIBPDB;
+    use hibp_core::{debug_HASH_to_hex, InterpolationSearch};
+
+    fn db_directory() -> String {
+        env::var("DB_DIRECTORY").unwrap()
+    }
+
+    #[test]
+    fn test_interpolation_search() {
+        let mut db = HIBPDB::new(db_directory(), false);
+
+        let mut view = String::from("");
+
+        let percent: usize = (0.23 * (db.len() as f64)) as usize;
+        let t = db.index()[percent];
+        debug_HASH_to_hex(&t, &mut view);
+
+        match db.index().interpolation_search(&t) {
+            Ok(v) => assert_eq!(percent, v),
+            Err(_) => assert!(false),
+        }
+
+        let percent: usize = (0.90 * (db.len() as f64)) as usize;
+        let t = db.index()[percent];
+        debug_HASH_to_hex(&t, &mut view);
+
+        match db.index().interpolation_search(&t) {
+            Ok(v) => assert_eq!(percent, v),
+            Err(_) => assert!(false),
+        }
+    }
+}
+
+
+

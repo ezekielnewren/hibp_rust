@@ -76,6 +76,10 @@ impl<'a> HIBPDB<'a> {
             self.index().binary_search(&key)
         }
     }
+
+    pub fn len(&self) -> usize {
+        self.index().len()
+    }
 }
 
 

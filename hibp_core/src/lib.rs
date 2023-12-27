@@ -19,12 +19,8 @@ use rand::{Error, RngCore, SeedableRng};
 // pub struct HASH([u8; 16]);
 pub type HASH = [u8; 16];
 
-pub fn debug_HASH_to_hex(v: &HASH, view: &mut String) {
-    #[cfg(debug_assertions)]
-    {
-        let t = hex::encode_upper(v);
-        *view = t.clone();
-    }
+pub fn HASH_to_hex(v: &HASH) -> String {
+    hex::encode_upper(v)
 }
 
 pub struct Job {
@@ -243,9 +239,10 @@ pub trait InterpolationSearch<T> {
 
 impl InterpolationSearch<HASH> for [HASH] {
     fn interpolation_search(&self, key: &HASH) -> Result<usize, usize> {
-        let mut _key__hash = String::from("");
-        debug_HASH_to_hex(key, &mut _key__hash);
-        let mut _view_hash = String::from("");
+        #[cfg(debug_assertions)]
+        let _key__hash = HASH_to_hex(key);
+        #[cfg(debug_assertions)]
+        let _view_hash = String::from("");
 
         let slope: u128 = u128::MAX/self.len() as u128;
         let key_as_u128 = u128::from_be_bytes(*key);
@@ -257,12 +254,14 @@ impl InterpolationSearch<HASH> for [HASH] {
         let mut hi = self.len()-1;
         let _len = self.len();
 
-        debug_HASH_to_hex(&self[guess], &mut _view_hash);
+        #[cfg(debug_assertions)]
+        let _view_hash = HASH_to_hex(&self[guess]);
 
         let mut i = guess;
         if key < &self[i] {
             while key < &self[i] && i < _len {
-                debug_HASH_to_hex(&self[i], &mut _view_hash);
+                #[cfg(debug_assertions)]
+                let _view_hash = HASH_to_hex(&self[i]);
                 hi = i;
                 i = match i.checked_sub(step) {
                     None => break,
@@ -270,16 +269,19 @@ impl InterpolationSearch<HASH> for [HASH] {
                 };
                 step <<= 1;
             }
-            debug_HASH_to_hex(&self[i], &mut _view_hash);
+            #[cfg(debug_assertions)]
+            let _view_hash = HASH_to_hex(&self[i]);
             lo = i;
         } else {
             while key > &self[i] {
-                debug_HASH_to_hex(&self[i], &mut _view_hash);
+                #[cfg(debug_assertions)]
+                let _view_hash = HASH_to_hex(&self[i]);
                 lo = i;
                 i += step;
                 step <<= 1;
             }
-            debug_HASH_to_hex(&self[i], &mut _view_hash);
+            #[cfg(debug_assertions)]
+            let _view_hash = HASH_to_hex(&self[i]);
             hi = i;
         }
 

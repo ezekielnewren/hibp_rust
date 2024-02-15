@@ -197,6 +197,17 @@ fn main() {
         })
     });
 
+    b.register("dbquery_miss_interpolation_search", |args| {
+        let mut db = HIBPDB::new(args.dbdirectory.clone());
+        let mut rng = RandomItemGenerator::new(BUFFER_SIZE);
+
+        return Box::new(move || {
+            let key = rng.next_item();
+            let slice = db.index();
+            let _ = slice.interpolation_search(key);
+        })
+    });
+
     b.register("dbquery_hit_binary_search", |args| {
         let mut db = HIBPDB::new(args.dbdirectory.clone());
         let mut rng = RandomItemGenerator::<usize>::new(BUFFER_SIZE);
@@ -206,17 +217,6 @@ fn main() {
             let index = rng.next_item()%array.len();
             let key: &HASH = &array[index];
             let _ = array.binary_search(key);
-        })
-    });
-
-    b.register("dbquery_miss_interpolation_search", |args| {
-        let mut db = HIBPDB::new(args.dbdirectory.clone());
-        let mut rng = RandomItemGenerator::new(BUFFER_SIZE);
-
-        return Box::new(move || {
-            let key = rng.next_item();
-            let slice = db.index();
-            let _ = slice.interpolation_search(key);
         })
     });
 

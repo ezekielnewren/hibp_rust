@@ -1,7 +1,11 @@
 use std::fs::File;
+use std::io::{Read, Write};
 use std::mem::size_of;
+use flate2::Compression;
+use flate2::write::GzEncoder;
 use memmap2::{Mmap, MmapOptions};
-use crate::{HASH, InterpolationSearch};
+use reqwest::Error;
+use crate::{GenericError, HASH, InterpolationSearch};
 
 pub struct FileArray {
     pub pathname: String,
@@ -9,9 +13,56 @@ pub struct FileArray {
     pub mmap: Mmap,
 }
 
+pub struct HashRange {
+    pub range: u32,
+    pub etag: u64,
+    pub plain: Vec<u8>,
+}
+
+fn download_range(rt: &tokio::runtime::Runtime, range: u32) -> Result<HashRange, GenericError> {
+    let base_url = "https://api.pwnedpasswords.com/range/X?mode=ntlm";
+    let t = format!("{:05X}", range);
+    let url = base_url.replace("X", t.as_str());
+
+    rt.block_on(async {
+        let client = reqwest::Client::new();
+        let response = client.get(url)
+            .header(reqwest::header::ACCEPT_ENCODING, "gzip")
+            .send()
+            .await?
+            .error_for_status()?;
+
+        let h = response.headers();
+        let mut etag = h.get("etag").unwrap().to_str().unwrap();
+        let prefix = "W/\"0x";
+        if etag.starts_with(prefix) {
+            etag = &etag[prefix.len()..etag.len()-1]
+        }
+        let etag_u64 = u64::from_str_radix(etag, 16).unwrap();
+
+        let mut t: Vec<String> = vec![];
+        for v in h.keys() {
+            t.push(v.to_string());
+        }
+
+        let content: Vec<u8> = response.bytes().await?.to_vec();
+        let mut decoder = flate2::read::GzDecoder::new(content.as_slice());
+        let mut decompressed_data = Vec::new();
+        decoder.read_to_end(&mut decompressed_data)?;
+        decompressed_data.retain(|&x| x != b'\r');
+        Ok(HashRange{
+            range,
+            etag: etag_u64,
+            plain: decompressed_data,
+        })
+    })
+}
+
 pub struct HIBPDB<'a> {
+    pub dbdir: String,
     pub index: FileArray,
     pub index_slice: &'a [HASH],
+    pub rt: tokio::runtime::Runtime,
 }
 
 impl<'a> HIBPDB<'a> {
@@ -35,9 +86,29 @@ impl<'a> HIBPDB<'a> {
         };
 
         Self {
+            dbdir,
             index: fa,
             index_slice,
+            rt: tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .unwrap(),
         }
+    }
+
+    pub fn download(self: &Self, range: u32) -> Result<(), GenericError> {
+        let prefix: String = self.dbdir.clone()+"/range/";
+        let hr = download_range(&self.rt, range)?;
+        let fname = format!("{:05X}_{:016X}.gz", hr.range, hr.etag);
+        let pathname = prefix+fname.as_str();
+
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+        encoder.write_all(hr.plain.as_slice())?;
+        let compressed_data = encoder.finish()?;
+
+        let mut fd = File::create(pathname)?;
+        fd.write_all(compressed_data.as_slice())?;
+        Ok(())
     }
 
     #[inline]

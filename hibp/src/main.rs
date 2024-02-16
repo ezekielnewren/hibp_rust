@@ -104,6 +104,22 @@ fn go3() {
 
 }
 
+fn go4() {
+    let args = Args::parse();
+
+    let mut db = HIBPDB::new(args.dbdirectory);
+
+    let mut stdin = BufReader::new(io::stdin());
+
+    for i in 0..(1<<20) {
+        println!("{:05X}", i);
+        db.download(i).expect(format!("failed to download {:05X}", i).as_str());
+    }
+
+
+
+}
+
 fn main() {
-    go3();
+    go4();
 }

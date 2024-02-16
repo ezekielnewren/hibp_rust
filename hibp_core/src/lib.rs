@@ -1,20 +1,50 @@
 pub mod db;
 pub mod batch_transform;
 
-use std::fmt::{Display};
+use std::fmt::{Debug, Display, Formatter};
 use std::mem::{size_of};
 use std::ops::{Index, IndexMut};
 use std::{slice};
+use std::any::Any;
 use std::panic::UnwindSafe;
 use std::str::Utf8Error;
 
 use md4::{Digest, Md4};
 use rand::{RngCore, SeedableRng};
+use reqwest::Error;
 
 pub type HASH = [u8; 16];
 
 pub fn HASH_to_hex(v: &HASH) -> String {
     hex::encode_upper(v)
+}
+
+
+pub struct GenericError {
+    err: Box<dyn Any>,
+}
+
+impl Debug for GenericError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        // f.write_str(self.err.as)
+        Ok(())
+    }
+}
+
+impl From<reqwest::Error> for GenericError {
+    fn from(value: reqwest::Error) -> Self {
+        GenericError{
+            err: Box::new(value),
+        }
+    }
+}
+
+impl From<std::io::Error> for GenericError {
+    fn from(value: std::io::Error) -> Self {
+        GenericError{
+            err: Box::new(value),
+        }
+    }
 }
 
 pub struct Job {

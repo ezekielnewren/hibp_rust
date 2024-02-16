@@ -8,13 +8,15 @@ use std::{slice};
 use std::any::Any;
 use std::collections::{BTreeMap, HashMap};
 use std::fs::DirEntry;
+use std::io::{Read, Write};
 use std::panic::UnwindSafe;
 use std::path::PathBuf;
 use std::str::Utf8Error;
+use flate2::Compression;
+use flate2::write::GzEncoder;
 
 use md4::{Digest, Md4};
 use rand::{RngCore, SeedableRng};
-use reqwest::Error;
 
 pub type HASH = [u8; 16];
 
@@ -22,6 +24,10 @@ pub fn HASH_to_hex(v: &HASH) -> String {
     hex::encode_upper(v)
 }
 
+
+pub struct DownloadError {
+    range: u32,
+}
 
 pub struct GenericError {
     err: Box<dyn Any>,
@@ -49,6 +55,22 @@ impl From<std::io::Error> for GenericError {
         }
     }
 }
+
+
+pub fn extract(compressed: &[u8]) -> std::io::Result<Vec<u8>> {
+    let mut decoder = flate2::read::GzDecoder::new(compressed);
+    let mut plain = Vec::new();
+    decoder.read_to_end(&mut plain)?;
+    return Ok(plain);
+}
+
+pub fn compress(plain: &[u8]) -> std::io::Result<Vec<u8>> {
+    let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+    encoder.write_all(plain)?;
+    encoder.finish()
+}
+
+
 
 pub struct Job {
     pub closure: Box<dyn FnOnce()>,

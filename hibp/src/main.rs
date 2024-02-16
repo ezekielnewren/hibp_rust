@@ -1,4 +1,4 @@
-use std::{io};
+use std::io;
 use std::collections::VecDeque;
 use std::io::{BufReader, prelude::*};
 use std::time::Instant;

@@ -1,3 +1,4 @@
+use std::fs;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::mem::size_of;
@@ -100,14 +101,20 @@ impl<'a> HIBPDB<'a> {
         let prefix: String = self.dbdir.clone()+"/range/";
         let hr = download_range(&self.rt, range)?;
         let fname = format!("{:05X}_{:016X}.gz", hr.range, hr.etag);
-        let pathname = prefix+fname.as_str();
+        // let pathname = prefix+fname.as_str();
 
         let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
         encoder.write_all(hr.plain.as_slice())?;
         let compressed_data = encoder.finish()?;
 
-        let mut fd = File::create(pathname)?;
-        fd.write_all(compressed_data.as_slice())?;
+        let path_tmp = prefix.clone()+"tmp."+fname.as_str();
+        let pathname = prefix+fname.as_str();
+        {
+            let mut fd = File::create(&path_tmp)?;
+            fd.write_all(compressed_data.as_slice())?;
+        }
+        fs::rename(path_tmp, pathname)?;
+
         Ok(())
     }
 

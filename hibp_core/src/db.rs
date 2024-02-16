@@ -10,6 +10,7 @@ use memmap2::{Mmap, MmapOptions};
 use reqwest::Error;
 use tokio::select;
 use crate::{compress, dirMap, DownloadError, extract, GenericError, HASH, InterpolationSearch};
+use bit_set::BitSet;
 
 use futures::future::{self, BoxFuture, select_all};
 use futures::stream::FuturesUnordered;
@@ -136,13 +137,17 @@ impl<'a> HIBPDB<'a> {
         let fut = async {
             let mut queue = FuturesUnordered::new();
 
+            let map = dirMap(format!("{}/range", self.dbdir).as_str()).unwrap();
+            let mut bs = BitSet::new();
+            for key in map.keys() {
+                let t = u32::from_str_radix(&key[0..5], 16).unwrap();
+                bs.insert(t as usize);
+            }
+
             let mut i = 0u32;
             loop {
-                let map = dirMap(format!("{}/range", self.dbdir).as_str());
                 if i<(1<<20) && queue.len() < limit {
-                    let prefix = format!("{:05X}", i);
-                    let c = map.unwrap().keys().filter(|&v| v.starts_with(prefix.as_str())).count();
-                    if c == 0 {
+                    if !bs.contains(i as usize) {
                         queue.push(download_range(i));
                     }
                     i += 1;
@@ -159,6 +164,10 @@ impl<'a> HIBPDB<'a> {
                             queue.push(download_range(err.range));
                         }
                     }
+                }
+
+                if i >= (1<<20) && queue.is_empty() {
+                    break;
                 }
             }
         };

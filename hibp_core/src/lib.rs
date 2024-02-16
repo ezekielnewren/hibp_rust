@@ -6,7 +6,10 @@ use std::mem::{size_of};
 use std::ops::{Index, IndexMut};
 use std::{slice};
 use std::any::Any;
+use std::collections::{BTreeMap, HashMap};
+use std::fs::DirEntry;
 use std::panic::UnwindSafe;
+use std::path::PathBuf;
 use std::str::Utf8Error;
 
 use md4::{Digest, Md4};
@@ -213,4 +216,22 @@ impl InterpolationSearch<HASH> for [HASH] {
         }
     }
 }
+
+
+pub fn dirMap(path: &str) -> Result<BTreeMap<String, DirEntry>, GenericError> {
+    let mut map: BTreeMap<String, DirEntry> = BTreeMap::new();
+
+    for entry in std::fs::read_dir(path)? {
+        let dir_entry = entry?;
+        let path = dir_entry.path();
+        if path.is_file() {
+            if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
+                map.insert(filename.to_owned(), dir_entry);
+            }
+        }
+    }
+
+    return Ok(map);
+}
+
 

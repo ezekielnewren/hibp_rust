@@ -5,7 +5,7 @@ use flate2::Compression;
 use flate2::write::GzEncoder;
 use memmap2::{Mmap, MmapOptions};
 use reqwest::Error;
-use crate::{GenericError, HASH, InterpolationSearch};
+use crate::{dirMap, GenericError, HASH, InterpolationSearch};
 
 pub struct FileArray {
     pub pathname: String,
@@ -108,6 +108,20 @@ impl<'a> HIBPDB<'a> {
 
         let mut fd = File::create(pathname)?;
         fd.write_all(compressed_data.as_slice())?;
+        Ok(())
+    }
+
+    pub fn update<F>(self: &Self, mut f: F) -> Result<(), GenericError> where F: FnMut(u32)  {
+        let map = dirMap((self.dbdir.clone()+"/range/").as_str())?;
+
+        for i in 0..(1<<20) {
+            let prefix = format!("{:05X}", i);
+            let m = map.keys().filter(|&key| key.starts_with(&prefix));
+            if m.count() == 0 {
+                f(i);
+                self.download(i)?;
+            }
+        }
         Ok(())
     }
 

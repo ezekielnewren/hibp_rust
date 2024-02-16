@@ -109,15 +109,11 @@ fn go4() {
 
     let mut db = HIBPDB::new(args.dbdirectory);
 
-    let mut stdin = BufReader::new(io::stdin());
+    let stdin = BufReader::new(io::stdin());
 
-    for i in 0..(1<<20) {
-        println!("{:05X}", i);
-        db.download(i).expect(format!("failed to download {:05X}", i).as_str());
-    }
-
-
-
+    db.update(|range| {
+        println!("{:05X}", range);
+    }).unwrap();
 }
 
 fn main() {

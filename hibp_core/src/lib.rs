@@ -14,9 +14,11 @@ use std::path::PathBuf;
 use std::str::Utf8Error;
 use flate2::Compression;
 use flate2::write::GzEncoder;
+use xz2::read::XzDecoder;
 
 use md4::{Digest, Md4};
 use rand::{RngCore, SeedableRng};
+use xz2::write::XzEncoder;
 
 pub type HASH = [u8; 16];
 
@@ -57,20 +59,31 @@ impl From<std::io::Error> for GenericError {
 }
 
 
-pub fn extract(compressed: &[u8]) -> std::io::Result<Vec<u8>> {
+pub fn extract_gz(compressed: &[u8]) -> std::io::Result<Vec<u8>> {
     let mut decoder = flate2::read::GzDecoder::new(compressed);
     let mut plain = Vec::new();
     decoder.read_to_end(&mut plain)?;
     return Ok(plain);
 }
 
-pub fn compress(plain: &[u8]) -> std::io::Result<Vec<u8>> {
+pub fn compress_gz(plain: &[u8]) -> std::io::Result<Vec<u8>> {
     let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
     encoder.write_all(plain)?;
     encoder.finish()
 }
 
+pub fn extract_xz(compressed: &[u8]) -> std::io::Result<Vec<u8>> {
+    let mut decoder = XzDecoder::new(compressed);
+    let mut plain = Vec::new();
+    decoder.read_to_end(&mut plain)?;
+    return Ok(plain);
+}
 
+pub fn compress_xz(plain: &[u8]) -> std::io::Result<Vec<u8>> {
+    let mut compressor = XzEncoder::new(Vec::new(), 6);
+    compressor.write_all(plain)?;
+    return compressor.finish();
+}
 
 pub struct Job {
     pub closure: Box<dyn FnOnce()>,

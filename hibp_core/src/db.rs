@@ -9,7 +9,7 @@ use flate2::write::GzEncoder;
 use memmap2::{Mmap, MmapOptions};
 use reqwest::Error;
 use tokio::select;
-use crate::{compress, dirMap, DownloadError, extract, GenericError, HASH, InterpolationSearch};
+use crate::{compress_gz, dirMap, DownloadError, extract_gz, GenericError, HASH, InterpolationSearch};
 use bit_set::BitSet;
 
 use futures::future::{self, BoxFuture, select_all};
@@ -64,9 +64,9 @@ async fn download_range(client: &reqwest::Client, range: u32) -> Result<HashRang
     let content: Vec<u8> = r.unwrap().to_vec();
 
     // extract the payload, delete carriage returns, recompress
-    let mut plain = extract(content.as_slice()).unwrap();
+    let mut plain = extract_gz(content.as_slice()).unwrap();
     plain.retain(|&x| x != b'\r');
-    let compressed = compress(plain.as_slice()).unwrap();
+    let compressed = compress_gz(plain.as_slice()).unwrap();
 
     Ok(HashRange{
         range,

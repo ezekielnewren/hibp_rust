@@ -23,7 +23,7 @@ fn go3() {
 
     let args = Args::parse();
 
-    let mut db = HIBPDB::new(args.dbdirectory);
+    let mut db = HIBPDB::new(args.dbdirectory).unwrap();
 
     let mut stdin = BufReader::new(io::stdin());
     let mut buff: Vec<u8> = Vec::new();
@@ -107,7 +107,7 @@ fn go3() {
 fn go4() {
     let args = Args::parse();
 
-    let mut db = HIBPDB::new(args.dbdirectory);
+    let mut db = HIBPDB::new(args.dbdirectory).unwrap();
 
     let stdin = BufReader::new(io::stdin());
 

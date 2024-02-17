@@ -169,7 +169,7 @@ fn main() {
     });
 
     b.register("dbquery_inmemory", |args| {
-        let mut db = HIBPDB::new(args.dbdirectory.clone());
+        let mut db = HIBPDB::new(args.dbdirectory.clone()).unwrap();
         let mut rng = RandomItemGenerator::new(BUFFER_SIZE);
 
         let mut index_slice: Vec<HASH> = Vec::new();
@@ -188,7 +188,7 @@ fn main() {
     });
 
     b.register("dbquery_miss_binary_search", |args| {
-        let mut db = HIBPDB::new(args.dbdirectory.clone());
+        let mut db = HIBPDB::new(args.dbdirectory.clone()).unwrap();
         let mut rng = RandomItemGenerator::new(BUFFER_SIZE);
 
         return Box::new(move || {
@@ -198,7 +198,7 @@ fn main() {
     });
 
     b.register("dbquery_miss_interpolation_search", |args| {
-        let mut db = HIBPDB::new(args.dbdirectory.clone());
+        let mut db = HIBPDB::new(args.dbdirectory.clone()).unwrap();
         let mut rng = RandomItemGenerator::new(BUFFER_SIZE);
 
         return Box::new(move || {
@@ -209,7 +209,7 @@ fn main() {
     });
 
     b.register("dbquery_hit_binary_search", |args| {
-        let mut db = HIBPDB::new(args.dbdirectory.clone());
+        let mut db = HIBPDB::new(args.dbdirectory.clone()).unwrap();
         let mut rng = RandomItemGenerator::<usize>::new(BUFFER_SIZE);
 
         return Box::new(move || {
@@ -221,7 +221,7 @@ fn main() {
     });
 
     b.register("dbquery_hit_interpolation_search", |args| {
-        let mut db = HIBPDB::new(args.dbdirectory.clone());
+        let mut db = HIBPDB::new(args.dbdirectory.clone()).unwrap();
         let mut rng = RandomItemGenerator::<usize>::new(BUFFER_SIZE);
 
         return Box::new(move || {

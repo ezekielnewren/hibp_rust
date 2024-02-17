@@ -105,12 +105,11 @@ impl<'a> HIBPDB<'a> {
         let dirRange = self.dbdir.clone()+"/range/";
         fs::create_dir_all(dirRange.clone()).unwrap();
 
-        let limit = 100;
+        let limit = 500;
         let client = reqwest::Client::new();
 
         let fut = async {
-            // let mut queue = FuturesUnordered::new();
-            let mut queue = FuturesOrdered::new();
+            let mut queue = FuturesUnordered::new();
 
             let map = dirMap(dirRange.as_str()).unwrap();
             let mut bs = BitSet::new();
@@ -123,7 +122,7 @@ impl<'a> HIBPDB<'a> {
             loop {
                 if i<(1<<20) && queue.len() < limit {
                     if !bs.contains(i as usize) {
-                        queue.push_back(download_range(&client, i));
+                        queue.push(download_range(&client, i));
                     }
                     i += 1;
                     continue;

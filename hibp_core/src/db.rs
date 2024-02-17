@@ -28,12 +28,11 @@ pub struct HashRange {
     pub compressed: Vec<u8>,
 }
 
-async fn download_range(range: u32) -> Result<HashRange, DownloadError> {
+async fn download_range(client: &reqwest::Client, range: u32) -> Result<HashRange, DownloadError> {
     let base_url = "https://api.pwnedpasswords.com/range/X?mode=ntlm";
     let t = format!("{:05X}", range);
     let url = base_url.replace("X", t.as_str());
 
-    let client = reqwest::Client::new();
     let r = client.get(url)
         .header(reqwest::header::ACCEPT_ENCODING, "gzip")
         .send()
@@ -134,6 +133,8 @@ impl<'a> HIBPDB<'a> {
 
         let limit = 1000;
 
+        let client = reqwest::Client::new();
+
         let fut = async {
             let mut queue = FuturesUnordered::new();
 
@@ -148,7 +149,7 @@ impl<'a> HIBPDB<'a> {
             loop {
                 if i<(1<<20) && queue.len() < limit {
                     if !bs.contains(i as usize) {
-                        queue.push(download_range(i));
+                        queue.push(download_range(&client, i));
                     }
                     i += 1;
                     continue;
@@ -161,7 +162,7 @@ impl<'a> HIBPDB<'a> {
                             self.save(v).unwrap();
                         }
                         Err(err) => {
-                            queue.push(download_range(err.range));
+                            queue.push(download_range(&client, err.range));
                         }
                     }
                 }

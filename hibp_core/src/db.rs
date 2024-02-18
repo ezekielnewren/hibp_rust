@@ -70,9 +70,10 @@ pub struct HashRange {
 }
 
 impl HashRange {
+    pub const EXTENSION: &'static str = "gz";
 
     fn name(&self) -> String {
-        return format!("{:05X}_{:016X}.xz", self.range, self.etag);
+        return format!("{:05X}_{:016X}.{}", self.range, self.etag, Self::EXTENSION);
     }
 
 }
@@ -101,7 +102,7 @@ impl<'a> HIBPDB<'a> {
 
     pub fn save(self: &Self, hr: HashRange) -> std::io::Result<()> {
         let prefix: String = self.dbdir.clone()+"/range/";
-        let fname = format!("{:05X}_{:016X}.xz", hr.range, hr.etag);
+        let fname = format!("{:05X}_{:016X}.{}", hr.range, hr.etag, HashRange::EXTENSION);
 
         let path_tmp = prefix.clone()+"tmp."+fname.as_str();
         let pathname = prefix+fname.as_str();
@@ -165,12 +166,12 @@ impl<'a> HIBPDB<'a> {
     }
 
 
-    fn range_map(&self) -> io::Result<Vec<String>> {
+    pub fn range_map(&self) -> io::Result<Vec<String>> {
         let dirRange = self.dbdir.clone()+"/range/";
 
         let mut ls = dir_list(dirRange.as_str()).unwrap();
         ls.sort();
-        let re = Regex::new("^([0-9a-fA-F]{5})_([0-9a-fA-F]{16}).xz$").unwrap();
+        let re = Regex::new("^([0-9a-fA-F]{5})_([0-9a-fA-F]{16})\\..z$").unwrap();
 
         let mut out: Vec<String> = Vec::new();
 
@@ -218,7 +219,11 @@ impl<'a> HIBPDB<'a> {
             let mut fd = File::open(dirRange.clone()+"/"+filename.as_str())?;
             fd.read_to_end(&mut buff)?;
 
-            let plain = extract_xz(buff.as_slice())?;
+            let plain = match HashRange::EXTENSION {
+                "xz" => extract_xz(buff.as_slice()),
+                "gz" => extract_xz(buff.as_slice()),
+                _ => return Err(io::Error::new(ErrorKind::InvalidInput, "unsupported file type")),
+            }?;
 
             for v in plain.lines() {
                 let line = v?;
@@ -287,16 +292,18 @@ async fn download_range(client: &reqwest::Client, range: u32) -> Result<HashRang
         return Err(DownloadError{range});
     }
 
-    let content: Vec<u8> = r.unwrap().to_vec();
+    let mut content: Vec<u8> = r.unwrap().to_vec();
 
-    // extract the payload, delete carriage returns, recompress
-    let mut plain = extract_gz(content.as_slice()).unwrap();
-    plain.retain(|&x| x != b'\r');
-    let compressed = compress_xz(plain.as_slice()).unwrap();
+    if HashRange::EXTENSION == "xz" {
+        // extract the payload, delete carriage returns, recompress
+        let mut plain = extract_gz(content.as_slice()).unwrap();
+        plain.retain(|&x| x != b'\r');
+        content = compress_xz(plain.as_slice()).unwrap();
+    }
 
     Ok(HashRange{
         range,
         etag: etag_u64,
-        compressed,
+        compressed: content,
     })
 }

@@ -1,18 +1,15 @@
 use std::cmp::min;
 use std::collections::HashMap;
-use std::env;
-use std::io::Write;
-use std::ops::Deref;
+use std::fs::File;
+use std::io::{Read, Write};
 use hibp_core::*;
 
 use std::time::{Duration, Instant};
 use md4::{Digest, Md4};
-use rand::{Error, random, Rng, RngCore, SeedableRng};
+use rand::{Rng, RngCore, SeedableRng};
 use thousands::Separable;
 use clap::Parser;
 use hibp_core::db::HIBPDB;
-// use rand::Fill;
-
 
 pub fn timeit<F>(min_runtime: Duration, mut inner: F) -> u64
     where F: FnMut(),
@@ -230,6 +227,27 @@ fn main() {
             let key: &HASH = &array[index];
             let slice = db.index();
             let _ = slice.interpolation_search(key);
+        })
+    });
+
+    b.register("range_extract", |args| {
+        let mut db = HIBPDB::new(args.dbdirectory.clone()).unwrap();
+        let mut rng = RandomItemGenerator::<usize>::new(BUFFER_SIZE);
+
+        let map = db.range_map().unwrap();
+        let mut buff: Vec<u8> = Vec::new();
+
+        return Box::new(move || {
+            buff.clear();
+            let idx = rng.next_item()&0xFFFFF;
+            let pathname = db.dbdir.clone()+"/range/"+&map[idx];
+            let mut fd = File::open(&pathname).unwrap();
+            fd.read_to_end(&mut buff).unwrap();
+            if pathname.ends_with("xz") {
+                extract_xz(buff.as_slice()).unwrap();
+            } else {
+                extract_gz(buff.as_slice()).unwrap();
+            }
         })
     });
 

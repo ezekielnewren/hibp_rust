@@ -50,15 +50,6 @@ impl From<reqwest::Error> for GenericError {
     }
 }
 
-impl From<std::io::Error> for GenericError {
-    fn from(value: std::io::Error) -> Self {
-        GenericError{
-            err: Box::new(value),
-        }
-    }
-}
-
-
 pub fn extract_gz(compressed: &[u8]) -> std::io::Result<Vec<u8>> {
     let mut decoder = flate2::read::GzDecoder::new(compressed);
     let mut plain = Vec::new();
@@ -253,20 +244,32 @@ impl InterpolationSearch<HASH> for [HASH] {
 }
 
 
-pub fn dirMap(path: &str) -> Result<BTreeMap<String, DirEntry>, GenericError> {
-    let mut map: BTreeMap<String, DirEntry> = BTreeMap::new();
+// pub fn dirMap(path: &str) -> std::io::Result<BTreeMap<String, DirEntry>> {
+//     let mut map: BTreeMap<String, DirEntry> = BTreeMap::new();
+//
+//     for entry in std::fs::read_dir(path)? {
+//         let dir_entry = entry?;
+//         let path = dir_entry.path();
+//         if path.is_file() {
+//             if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
+//                 map.insert(filename.to_owned(), dir_entry);
+//             }
+//         }
+//     }
+//
+//     return Ok(map);
+// }
+
+
+pub fn dir_list(path: &str) -> std::io::Result<Vec<String>> {
+    let mut list: Vec<String> = Vec::new();
 
     for entry in std::fs::read_dir(path)? {
-        let dir_entry = entry?;
-        let path = dir_entry.path();
-        if path.is_file() {
-            if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
-                map.insert(filename.to_owned(), dir_entry);
-            }
-        }
+        let t = entry?.file_name();
+        let name = t.to_str().unwrap();
+        list.push(String::from(name));
     }
 
-    return Ok(map);
+    return Ok(list);
 }
-
 

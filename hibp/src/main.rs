@@ -111,9 +111,13 @@ fn go4() {
 
     let stdin = BufReader::new(io::stdin());
 
-    db.update(|range| {
+    let status: fn(u32) = |range| {
         println!("{:05X}", range);
-    }).unwrap();
+    };
+
+    // db.update(status).unwrap();
+
+    let _ = db.construct_index(status);
 }
 
 fn main() {

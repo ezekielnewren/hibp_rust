@@ -1,13 +1,18 @@
-use std::fs;
-use std::fs::File;
-use std::io::{Read, Write};
+use std::collections::HashMap;
+use std::{fs, io};
+use std::fs::{DirEntry, File, OpenOptions};
+use std::io::{BufRead, ErrorKind, Read, Write};
 use std::mem::size_of;
+use std::num::ParseIntError;
+use std::ops::Index;
 use memmap2::{Mmap, MmapMut, MmapOptions};
-use crate::{compress_xz, dirMap, DownloadError, extract_gz, GenericError, HASH, InterpolationSearch};
+use crate::{compress_xz, dir_list, DownloadError, extract_gz, extract_xz, GenericError, HASH, InterpolationSearch};
 use bit_set::BitSet;
 
 use futures::stream::{FuturesOrdered, FuturesUnordered};
 use futures::StreamExt;
+use hex::FromHexError;
+use regex::Regex;
 
 pub struct FileArray<'a, T> {
     pub pathname: String,
@@ -64,6 +69,14 @@ pub struct HashRange {
     pub compressed: Vec<u8>,
 }
 
+impl HashRange {
+
+    fn name(&self) -> String {
+        return format!("{:05X}_{:016X}.xz", self.range, self.etag);
+    }
+
+}
+
 pub struct HIBPDB<'a> {
     pub dbdir: String,
     pub index: Option<FileArray<'a, HASH>>,
@@ -86,7 +99,7 @@ impl<'a> HIBPDB<'a> {
         })
     }
 
-    pub fn save(self: &Self, hr: HashRange) -> Result<(), GenericError> {
+    pub fn save(self: &Self, hr: HashRange) -> std::io::Result<()> {
         let prefix: String = self.dbdir.clone()+"/range/";
         let fname = format!("{:05X}_{:016X}.xz", hr.range, hr.etag);
 
@@ -111,9 +124,9 @@ impl<'a> HIBPDB<'a> {
         let fut = async {
             let mut queue = FuturesUnordered::new();
 
-            let map = dirMap(dirRange.as_str()).unwrap();
+            let ls = dir_list(dirRange.as_str()).unwrap();
             let mut bs = BitSet::new();
-            for key in map.keys() {
+            for key in ls {
                 let t = u32::from_str_radix(&key[0..5], 16).unwrap();
                 bs.insert(t as usize);
             }
@@ -147,6 +160,77 @@ impl<'a> HIBPDB<'a> {
         };
 
         self.rt.block_on(fut);
+
+        Ok(())
+    }
+
+
+    fn range_map(&self) -> io::Result<Vec<String>> {
+        let dirRange = self.dbdir.clone()+"/range/";
+
+        let mut ls = dir_list(dirRange.as_str()).unwrap();
+        ls.sort();
+        let re = Regex::new("^([0-9a-fA-F]{5})_([0-9a-fA-F]{16}).xz$").unwrap();
+
+        let mut out: Vec<String> = Vec::new();
+
+        let mut i = 0;
+        for filename in ls {
+            if ! re.is_match(&filename) {
+                continue;
+            }
+            let cap = re.captures(filename.as_str()).unwrap();
+            let range = u32::from_str_radix(cap.get(1).unwrap().as_str(), 16).unwrap();
+            if range > i {
+                return Err(io::Error::new(ErrorKind::NotFound, format!("missing {:05X}", i)));
+            } else if range < i {
+                return Err(io::Error::new(ErrorKind::AlreadyExists, format!("duplicate {:05X}", i)));
+            }
+            out.push(filename);
+            i += 1;
+        }
+
+        if i < (1<<20) {
+            return Err(io::Error::new(ErrorKind::NotFound, "not all ranges are present"));
+        }
+
+        return Ok(out);
+    }
+
+
+    // pub fn update<F>(self: &Self, mut f: F) -> Result<(), GenericError> where F: FnMut(u32)  {
+    pub fn construct_index<F>(&self, mut f: F) -> io::Result<()> where F: FnMut(u32) {
+        let dirRange = self.dbdir.clone()+"/range/";
+
+        let mut map = self.range_map().unwrap();
+
+        let mut file_index = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(self.dbdir.clone()+"/index.bin")?;
+
+        let mut buff: Vec<u8> = Vec::new();
+        for i in 0u32..(1<<20) {
+            buff.clear();
+
+            let filename = &map[i as usize];
+            let mut fd = File::open(dirRange.clone()+"/"+filename.as_str())?;
+            fd.read_to_end(&mut buff)?;
+
+            let plain = extract_xz(buff.as_slice())?;
+
+            for v in plain.lines() {
+                let line = v?;
+                let arr: Vec<&str> = line.split(':').collect();
+                let t = hex::decode(format!("{:05X}{}", i, arr[0]));
+                match t {
+                    Ok(hash) => file_index.write_all(hash.as_slice())?,
+                    Err(e) => return Err(io::Error::new(ErrorKind::InvalidInput, e.to_string())),
+                }
+            }
+            f(i);
+        }
 
         Ok(())
     }

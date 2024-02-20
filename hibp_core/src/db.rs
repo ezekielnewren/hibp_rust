@@ -199,11 +199,36 @@ impl<'a> HIBPDB<'a> {
     }
 
 
-    // pub fn update<F>(self: &Self, mut f: F) -> Result<(), GenericError> where F: FnMut(u32)  {
-    pub fn construct_index<F>(&self, mut f: F) -> io::Result<()> where F: FnMut(u32) {
-        let dirRange = self.dbdir.clone()+"/range/";
+    async fn extract_range(&self, range_map: &Vec<String>, range: u32) -> io::Result<Vec<u8>> {
+        let dir_range = self.dbdir.clone()+"/range/";
 
-        let mut map = self.range_map().unwrap();
+        let mut buff: Vec<u8> = Vec::new();
+        let filename = &range_map[range as usize];
+        let mut fd = File::open(dir_range.clone()+"/"+filename.as_str())?;
+        fd.read_to_end(&mut buff)?;
+
+        let plain = match HashRange::EXTENSION {
+            "xz" => extract_xz(buff.as_slice()),
+            "gz" => extract_gz(buff.as_slice()),
+            _ => return Err(io::Error::new(ErrorKind::InvalidInput, "unsupported file type")),
+        }?;
+
+        buff.clear();
+        let mut hash = vec![0u8; 16];
+        for v in plain.lines() {
+            let line = v?;
+            let t = hex::decode_to_slice(format!("{:05X}{}", range, &line[0..(32-5)]), hash.as_mut_slice());
+            match t {
+                Ok(_) => buff.extend(&hash),
+                Err(e) => return Err(io::Error::new(ErrorKind::InvalidInput, e.to_string())),
+            }
+        }
+
+        Ok(buff)
+    }
+
+    pub fn construct_index<F>(&self, mut f: F) -> io::Result<()> where F: FnMut(u32) {
+        let map = self.range_map().unwrap();
 
         let mut file_index = OpenOptions::new()
             .create(true)
@@ -211,33 +236,25 @@ impl<'a> HIBPDB<'a> {
             .truncate(true)
             .open(self.dbdir.clone()+"/index.bin")?;
 
-        let mut buff: Vec<u8> = Vec::new();
-        for i in 0u32..(1<<20) {
-            buff.clear();
+        self.rt.block_on(async {
+            let mut queue = FuturesOrdered::new();
+            let limit = 1000;
 
-            let filename = &map[i as usize];
-            let mut fd = File::open(dirRange.clone()+"/"+filename.as_str())?;
-            fd.read_to_end(&mut buff)?;
-
-            let plain = match HashRange::EXTENSION {
-                "xz" => extract_xz(buff.as_slice()),
-                "gz" => extract_gz(buff.as_slice()),
-                _ => return Err(io::Error::new(ErrorKind::InvalidInput, "unsupported file type")),
-            }?;
-
-            buff.clear();
-            let mut hash = vec![0u8; 16];
-            for v in plain.lines() {
-                let line = v?;
-                let t = hex::decode_to_slice(format!("{:05X}{}", i, &line[0..(32-5)]), hash.as_mut_slice());
-                match t {
-                    Ok(_) => buff.extend(&hash),
-                    Err(e) => return Err(io::Error::new(ErrorKind::InvalidInput, e.to_string())),
+            let mut wp = 0u32;
+            let mut rp = 0u32;
+            while rp < 1<<20 {
+                if wp < (1<<20) && queue.len() < limit {
+                    let fut = self.extract_range(&map, wp);
+                    queue.push_back(fut);
+                    wp += 1;
+                } else {
+                    let buff = queue.next().await.unwrap().unwrap();
+                    file_index.write_all(buff.as_slice()).unwrap();
+                    f(rp);
+                    rp += 1;
                 }
             }
-            file_index.write_all(buff.as_slice())?;
-            f(i);
-        }
+        });
 
         Ok(())
     }

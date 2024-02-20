@@ -15,14 +15,17 @@ struct Args {
     #[arg(short, long)]
     dbdirectory: String,
 
-    #[arg(short, long, default_value_t = 1)]
-    count: u8,
+    #[arg(short, long)]
+    update: bool,
+
+    #[arg(short, long)]
+    ingest: bool,
+
+    #[arg(short, long)]
+    construct: bool,
 }
 
-fn go3() {
-
-    let args = Args::parse();
-
+fn ingest(args: Args) {
     let mut db = HIBPDB::new(args.dbdirectory).unwrap();
 
     let mut stdin = BufReader::new(io::stdin());
@@ -104,22 +107,51 @@ fn go3() {
 
 }
 
-fn go4() {
-    let args = Args::parse();
-
+fn update(args: Args) {
     let mut db = HIBPDB::new(args.dbdirectory).unwrap();
-
-    let stdin = BufReader::new(io::stdin());
 
     let status: fn(u32) = |range| {
         println!("{:05X}", range);
     };
 
-    // db.update(status).unwrap();
+    db.update(status).unwrap();
+}
 
-    let _ = db.construct_index(status);
+fn construct(args: Args) {
+    let mut db = HIBPDB::new(args.dbdirectory).unwrap();
+
+    let status: fn(u32) = |range| {
+        println!("{:05X}", range);
+    };
+
+    db.construct_index(status).unwrap();
 }
 
 fn main() {
-    go4();
+    let args = Args::parse();
+
+    if args.ingest {
+        ingest(args);
+    } else if args.update {
+        update(args);
+    } else if args.construct {
+        construct(args);
+    }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -221,19 +221,21 @@ impl<'a> HIBPDB<'a> {
 
             let plain = match HashRange::EXTENSION {
                 "xz" => extract_xz(buff.as_slice()),
-                "gz" => extract_xz(buff.as_slice()),
+                "gz" => extract_gz(buff.as_slice()),
                 _ => return Err(io::Error::new(ErrorKind::InvalidInput, "unsupported file type")),
             }?;
 
+            buff.clear();
+            let mut hash = vec![0u8; 16];
             for v in plain.lines() {
                 let line = v?;
-                let arr: Vec<&str> = line.split(':').collect();
-                let t = hex::decode(format!("{:05X}{}", i, arr[0]));
+                let t = hex::decode_to_slice(format!("{:05X}{}", i, &line[0..(32-5)]), hash.as_mut_slice());
                 match t {
-                    Ok(hash) => file_index.write_all(hash.as_slice())?,
+                    Ok(_) => buff.extend(&hash),
                     Err(e) => return Err(io::Error::new(ErrorKind::InvalidInput, e.to_string())),
                 }
             }
+            file_index.write_all(buff.as_slice())?;
             f(i);
         }
 

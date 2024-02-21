@@ -4,7 +4,7 @@ mod batch_transform;
 use std::fmt::{Debug, Formatter};
 use std::mem::{size_of};
 use std::{io, slice};
-use std::io::{ErrorKind, Read, Write};
+use std::io::{BufRead, ErrorKind, Read, Write};
 use std::panic::UnwindSafe;
 use std::str::Utf8Error;
 use chrono::DateTime;
@@ -242,9 +242,8 @@ pub struct HashRange {
 
 impl HashRange {
     pub const EXTENSION: &'static str = "gz";
-
-    pub fn name(&self) -> String {
-        return format!("{:05X}.{}", self.range, Self::EXTENSION);
+    pub fn name(range: u32) -> String {
+        return format!("{:05X}.{}", range, Self::EXTENSION);
     }
 
     pub fn deserialize(buff: &[u8]) -> io::Result<Self> {
@@ -311,6 +310,27 @@ pub async fn download_range(client: &reqwest::Client, range: u32) -> Result<Hash
         timestamp,
         buff: content,
     })
+}
+
+pub fn convert_range(hr: HashRange) -> io::Result<Vec<u8>> {
+    let plain = match HashRange::EXTENSION {
+        "xz" => extract_xz(hr.buff.as_slice()),
+        "gz" => extract_gz(hr.buff.as_slice()),
+        _ => return Err(io::Error::new(ErrorKind::InvalidInput, "unsupported file type")),
+    }?;
+
+    let mut buff: Vec<u8> = Vec::new();
+    let mut hash = vec![0u8; 16];
+    for v in plain.lines() {
+        let line = v?;
+        let t = hex::decode_to_slice(format!("{:05X}{}", hr.range, &line[0..(32-5)]), hash.as_mut_slice());
+        match t {
+            Ok(_) => buff.extend(&hash),
+            Err(e) => return Err(io::Error::new(ErrorKind::InvalidInput, e.to_string())),
+        }
+    }
+
+    Ok(buff)
 }
 
 pub fn dir_list(path: &str) -> std::io::Result<Vec<String>> {

@@ -39,6 +39,8 @@ fn test_arbitrary_code_snippet() {
     assert_eq!(hr.range,     hrr.range);
     assert_eq!(hr.etag,      hrr.etag);
     assert_eq!(hr.timestamp, hrr.timestamp);
+    assert_eq!(hr.len,       hrr.len);
+    assert_eq!(hr.format,    hrr.format);
     assert_eq!(hr.buff,      hrr.buff);
 }
 

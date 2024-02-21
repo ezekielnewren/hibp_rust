@@ -236,14 +236,15 @@ pub struct HashRange {
     pub range: u32,
     pub etag: u64,
     pub timestamp: i64,
+    pub len: u64,
+    pub format: String,
     #[serde(skip)]
     pub buff: Vec<u8>,
 }
 
 impl HashRange {
-    pub const EXTENSION: &'static str = "gz";
     pub fn name(range: u32) -> String {
-        return format!("{:05X}.{}", range, Self::EXTENSION);
+        return format!("{:05X}.dat", range);
     }
 
     pub fn deserialize(buff: &[u8]) -> io::Result<Self> {
@@ -261,7 +262,7 @@ impl HashRange {
     pub fn serialize(&self) -> Vec<u8> {
         let mut payload: Vec<u8> = Vec::new();
 
-        let mut meta = serde_cbor::to_vec(&self).unwrap();
+        let meta = serde_cbor::to_vec(&self).unwrap();
         let size = meta.len() as u16;
         payload.extend_from_slice(&size.to_le_bytes());
         payload.extend(&meta);
@@ -308,12 +309,14 @@ pub async fn download_range(client: &reqwest::Client, range: u32) -> Result<Hash
         range,
         etag: etag_u64,
         timestamp,
+        len: 0,
+        format: String::from("gz"),
         buff: content,
     })
 }
 
 pub fn convert_range(hr: HashRange) -> io::Result<Vec<u8>> {
-    let plain = match HashRange::EXTENSION {
+    let plain = match hr.format.as_str() {
         "xz" => extract_xz(hr.buff.as_slice()),
         "gz" => extract_gz(hr.buff.as_slice()),
         _ => return Err(io::Error::new(ErrorKind::InvalidInput, "unsupported file type")),

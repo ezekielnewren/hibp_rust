@@ -1,14 +1,13 @@
 use std::{fs, io};
 use std::fs::{File, OpenOptions};
-use std::io::{BufRead, ErrorKind, Read, Write};
+use std::io::{Read, Write};
 use std::mem::size_of;
 use memmap2::{MmapMut, MmapOptions};
-use crate::{convert_range, dir_list, download_range, extract_gz, extract_xz, HASH, HashRange, InterpolationSearch};
+use crate::{convert_range, dir_list, download_range, HASH, HashRange, InterpolationSearch};
 use bit_set::BitSet;
 
-use futures::stream::{FuturesOrdered, FuturesUnordered};
+use futures::stream::{FuturesUnordered};
 use futures::StreamExt;
-use regex::Regex;
 use crate::batch_transform::{Transform, TransformSerial};
 
 pub struct FileArray<'a, T> {

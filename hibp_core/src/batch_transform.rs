@@ -126,7 +126,7 @@ impl<From: 'static, To: 'static> ConcurrentBatchTransform<From, To> {
 
         let at = Arc::new(t);
 
-        for i in 0..thread_count {
+        for _ in 0..thread_count {
             let _data = it.data.clone();
             let transform = at.clone();
 

@@ -1,18 +1,13 @@
-use std::{fs, thread};
-use std::ops::{Index, IndexMut, Range};
-use tokio::runtime::Builder;
+use std::{fs};
 
-const DIR_SRC_DATA: &str = "src/data";
+// const DIR_SRC_DATA: &str = "src/data";
 const DIR_TESTS_DATA: &str = "tests/data";
 
 
-use std::io::Read;
-use hibp_core::{download_range, HashRange};
+use hibp_core::{download_range};
 
 #[test]
 fn test_test_data_directory() {
-    let cd = fs::canonicalize(".");
-
     let result = fs::metadata(DIR_TESTS_DATA);
     assert!(result.is_ok());
 
@@ -46,13 +41,15 @@ mod tests {
 
     #[test]
     fn test_interpolation_search() {
-        let mut db = HIBPDB::new(db_directory()).unwrap();
+        let db = HIBPDB::new(db_directory()).unwrap();
 
-        let mut view = String::from("");
+        #[allow(unused_variables)]
+        let view = String::from("");
 
         let percent: usize = (0.23 * (db.len() as f64)) as usize;
         let t = db.index()[percent];
-        view = HASH_to_hex(&t);
+        #[allow(unused_variables)]
+        let view = HASH_to_hex(&t);
 
         match db.index().interpolation_search(&t) {
             Ok(v) => assert_eq!(percent, v),
@@ -61,7 +58,8 @@ mod tests {
 
         let percent: usize = (0.90 * (db.len() as f64)) as usize;
         let t = db.index()[percent];
-        view = HASH_to_hex(&t);
+        #[allow(unused_variables)]
+        let view = HASH_to_hex(&t);
 
         match db.index().interpolation_search(&t) {
             Ok(v) => assert_eq!(percent, v),

@@ -1,18 +1,13 @@
-use std::collections::HashMap;
 use std::{fs, io};
-use std::fs::{DirEntry, File, OpenOptions};
+use std::fs::{File, OpenOptions};
 use std::io::{BufRead, ErrorKind, Read, Write};
 use std::mem::size_of;
-use std::num::ParseIntError;
-use std::ops::Index;
-use memmap2::{Mmap, MmapMut, MmapOptions};
-use crate::{compress_xz, dir_list, download_range, DownloadError, extract_gz, extract_xz, HASH, HashRange, InterpolationSearch};
+use memmap2::{MmapMut, MmapOptions};
+use crate::{dir_list, download_range, extract_gz, extract_xz, HASH, HashRange, InterpolationSearch};
 use bit_set::BitSet;
-use chrono::DateTime;
 
 use futures::stream::{FuturesOrdered, FuturesUnordered};
 use futures::StreamExt;
-use hex::FromHexError;
 use regex::Regex;
 
 pub struct FileArray<'a, T> {
@@ -39,8 +34,6 @@ impl<'a, T> FileArray<'a, T> {
             let ptr = mmap_mut.as_mut_ptr() as *mut T;
             std::slice::from_raw_parts_mut(ptr, mmap_mut.len()/size_of::<T>())
         };
-
-        let x: Vec<u8> = Vec::new();
 
         Ok(Self {
             pathname: _pathname,
@@ -104,8 +97,8 @@ impl<'a> HIBPDB<'a> {
     }
 
     pub fn update<F>(self: &Self, mut f: F) -> io::Result<()> where F: FnMut(u32)  {
-        let dirRange = self.dbdir.clone()+"/range/";
-        fs::create_dir_all(dirRange.clone()).unwrap();
+        let dir_range = self.dbdir.clone()+"/range/";
+        fs::create_dir_all(dir_range.clone()).unwrap();
 
         let limit = 500;
         let client = reqwest::Client::new();
@@ -113,7 +106,7 @@ impl<'a> HIBPDB<'a> {
         let fut = async {
             let mut queue = FuturesUnordered::new();
 
-            let ls = dir_list(dirRange.as_str()).unwrap();
+            let ls = dir_list(dir_range.as_str()).unwrap();
             let mut bs = BitSet::new();
             for key in ls {
                 let t = u32::from_str_radix(&key[0..5], 16).unwrap();
@@ -155,9 +148,9 @@ impl<'a> HIBPDB<'a> {
 
 
     pub fn range_map(&self) -> io::Result<Vec<String>> {
-        let dirRange = self.dbdir.clone()+"/range/";
+        let dir_range = self.dbdir.clone()+"/range/";
 
-        let mut ls = dir_list(dirRange.as_str()).unwrap();
+        let mut ls = dir_list(dir_range.as_str()).unwrap();
         ls.sort();
         let re = Regex::new("^([0-9a-fA-F]{5})_([0-9a-fA-F]{16})\\..z$").unwrap();
 

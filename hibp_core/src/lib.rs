@@ -1,16 +1,11 @@
 pub mod db;
 pub mod batch_transform;
 
-use std::fmt::{Debug, Display, Formatter};
+use std::fmt::{Debug, Formatter};
 use std::mem::{size_of};
-use std::ops::{Index, IndexMut};
 use std::{slice};
-use std::any::Any;
-use std::collections::{BTreeMap, HashMap};
-use std::fs::DirEntry;
 use std::io::{Read, Write};
 use std::panic::UnwindSafe;
-use std::path::PathBuf;
 use std::str::Utf8Error;
 use chrono::DateTime;
 use flate2::Compression;
@@ -23,6 +18,7 @@ use xz2::write::XzEncoder;
 
 pub type HASH = [u8; 16];
 
+#[allow(non_snake_case)]
 pub fn HASH_to_hex(v: &HASH) -> String {
     hex::encode_upper(v)
 }
@@ -171,6 +167,7 @@ pub trait InterpolationSearch<T> {
 }
 
 impl InterpolationSearch<HASH> for [HASH] {
+    #[allow(non_snake_case)]
     fn interpolation_search(&self, key: &HASH) -> Result<usize, usize> {
         #[cfg(debug_assertions)]
         let _key__hash = HASH_to_hex(key);
@@ -279,7 +276,7 @@ pub async fn download_range(client: &reqwest::Client, range: u32) -> Result<Hash
         return Err(DownloadError{range});
     }
 
-    let mut content: Vec<u8> = r.unwrap().to_vec();
+    let content: Vec<u8> = r.unwrap().to_vec();
 
     Ok(HashRange{
         range,

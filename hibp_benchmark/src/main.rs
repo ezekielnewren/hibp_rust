@@ -230,27 +230,6 @@ fn main() {
         })
     });
 
-    b.register("range_extract", |args| {
-        let mut db = HIBPDB::new(args.dbdirectory.clone()).unwrap();
-        let mut rng = RandomItemGenerator::<usize>::new(BUFFER_SIZE);
-
-        let map = db.range_map().unwrap();
-        let mut buff: Vec<u8> = Vec::new();
-
-        return Box::new(move || {
-            buff.clear();
-            let idx = rng.next_item()&0xFFFFF;
-            let pathname = db.dbdir.clone()+"/range/"+&map[idx];
-            let mut fd = File::open(&pathname).unwrap();
-            fd.read_to_end(&mut buff).unwrap();
-            if pathname.ends_with("xz") {
-                extract_xz(buff.as_slice()).unwrap();
-            } else {
-                extract_gz(buff.as_slice()).unwrap();
-            }
-        })
-    });
-
     let args = Args::parse();
     if args.benchmark.is_empty() {
         b.run_all(min_runtime);

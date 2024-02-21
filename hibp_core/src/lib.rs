@@ -1,5 +1,4 @@
 pub mod db;
-pub mod batch_transform;
 
 use std::fmt::{Debug, Formatter};
 use std::mem::{size_of};

@@ -1,13 +1,10 @@
 use std::io;
-use std::collections::VecDeque;
 use std::io::{BufReader, prelude::*};
 use std::time::Instant;
 
 use clap::Parser;
-use hex;
 use hibp_core::db::HIBPDB;
 use hibp_core::*;
-use hibp_core::batch_transform::{BatchTransform, ConcurrentBatchTransform};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -35,36 +32,10 @@ fn ingest(args: Args) {
     let mut found = 0u64;
     let mut miss = 0u64;
 
-    let thread_count = num_cpus::get_physical();
-
-    let cl = |v| {
-        let mut out = HashAndPassword {
-            hash: Default::default(),
-            password: v,
-        };
-
-        return match hash_password(&mut out) {
-            Ok(_) => Some(out),
-            Err(_) => None,
-        };
+    let mut hp = HashAndPassword{
+        hash: [0u8; 16],
+        password: vec![],
     };
-
-    let mut transformer = ConcurrentBatchTransform::<Vec<u8>, HashAndPassword>::new(thread_count, 1, cl);
-    // let mut transformer = SerialBatchTransform::<Vec<u8>, HashAndPassword>::new(500000, cl);
-
-    let mut batch = |it: &mut VecDeque<HashAndPassword>| {
-        for v in it.drain(..) {
-            let key = v.hash;
-            match db.find(&key) {
-                Ok(_) => found += 1,
-                Err(_) => miss += 1,
-            }
-        }
-        assert!(it.is_empty())
-    };
-
-    let mut batch_in = VecDeque::<Vec<u8>>::new();
-    let mut batch_out = VecDeque::<HashAndPassword>::new();
 
     let start = Instant::now();
     loop {
@@ -73,7 +44,7 @@ fn ingest(args: Args) {
         let _buff_capacity = buff.capacity();
         match stdin.read_until('\n' as u8, &mut buff) {
             Ok(0) => break, // EOF
-            Err(err) => {
+            Err(_) => {
                 break;
             }
             _ => {}
@@ -81,21 +52,21 @@ fn ingest(args: Args) {
         if buff.len() > 0 && buff[buff.len()-1] == b'\n' {
             buff.pop();
         }
-        linecount += 1;
 
-        batch_in.push_back(buff.clone());
-
-        if batch_in.len() >= transformer.get_batch_size() {
-            transformer.add(&mut batch_in);
-            transformer.take(&mut batch_out);
-            batch(&mut batch_out);
+        hp.password.clear();
+        hp.password.extend(&buff);
+        if hash_password(&mut hp).is_err() {
+            continue;
         }
 
-    }
+        match db.find(&hp.hash) {
+            Ok(_) => found += 1,
+            Err(_) => miss += 1,
+        }
 
-    transformer.close();
-    transformer.take(&mut batch_out);
-    batch(&mut batch_out);
+        linecount += 1;
+
+    }
 
     let seconds = start.elapsed().as_secs_f64();
     let rate = (linecount as f64 / seconds) as u64;
@@ -103,12 +74,10 @@ fn ingest(args: Args) {
     let invalid_utf8 = linecount - (found + miss);
     println!("lines: {}, invalid_utf8: {}, found: {}, miss: {}", linecount, invalid_utf8, found, miss);
     println!("rate: {}", rate)
-
-
 }
 
 fn update(args: Args) {
-    let mut db = HIBPDB::new(args.dbdirectory).unwrap();
+    let db = HIBPDB::new(args.dbdirectory).unwrap();
 
     let status: fn(u32) = |range| {
         println!("{:05X}", range);
@@ -118,7 +87,7 @@ fn update(args: Args) {
 }
 
 fn construct(args: Args) {
-    let mut db = HIBPDB::new(args.dbdirectory).unwrap();
+    let db = HIBPDB::new(args.dbdirectory).unwrap();
 
     let status: fn(u32) = |range| {
         println!("{:05X}", range);

@@ -6,8 +6,9 @@ use std::mem::size_of;
 use std::num::ParseIntError;
 use std::ops::Index;
 use memmap2::{Mmap, MmapMut, MmapOptions};
-use crate::{compress_xz, dir_list, DownloadError, extract_gz, extract_xz, GenericError, HASH, InterpolationSearch};
+use crate::{compress_xz, dir_list, download_range, DownloadError, extract_gz, extract_xz, HASH, HashRange, InterpolationSearch};
 use bit_set::BitSet;
+use chrono::DateTime;
 
 use futures::stream::{FuturesOrdered, FuturesUnordered};
 use futures::StreamExt;
@@ -63,20 +64,7 @@ impl<'a, T> FileArray<'a, T> {
 
 }
 
-pub struct HashRange {
-    pub range: u32,
-    pub etag: u64,
-    pub compressed: Vec<u8>,
-}
 
-impl HashRange {
-    pub const EXTENSION: &'static str = "gz";
-
-    fn name(&self) -> String {
-        return format!("{:05X}_{:016X}.{}", self.range, self.etag, Self::EXTENSION);
-    }
-
-}
 
 pub struct HIBPDB<'a> {
     pub dbdir: String,
@@ -115,7 +103,7 @@ impl<'a> HIBPDB<'a> {
         Ok(())
     }
 
-    pub fn update<F>(self: &Self, mut f: F) -> Result<(), GenericError> where F: FnMut(u32)  {
+    pub fn update<F>(self: &Self, mut f: F) -> io::Result<()> where F: FnMut(u32)  {
         let dirRange = self.dbdir.clone()+"/range/";
         fs::create_dir_all(dirRange.clone()).unwrap();
 
@@ -278,51 +266,4 @@ impl<'a> HIBPDB<'a> {
 
 
 
-async fn download_range(client: &reqwest::Client, range: u32) -> Result<HashRange, DownloadError> {
-    let base_url = "https://api.pwnedpasswords.com/range/X?mode=ntlm";
-    let t = format!("{:05X}", range);
-    let url = base_url.replace("X", t.as_str());
 
-    let r = client.get(url)
-        .header(reqwest::header::ACCEPT_ENCODING, "gzip")
-        .send()
-        .await;
-
-    if r.is_err() {
-        return Err(DownloadError{ range });
-    }
-    let response = r.unwrap();
-
-    let h = response.headers();
-    let mut etag = h.get("etag").unwrap().to_str().unwrap();
-    let prefix = "W/\"0x";
-    if etag.starts_with(prefix) {
-        etag = &etag[prefix.len()..etag.len()-1]
-    }
-    let etag_u64 = u64::from_str_radix(etag, 16).unwrap();
-
-    let mut t: Vec<String> = vec![];
-    for v in h.keys() {
-        t.push(v.to_string());
-    }
-
-    let r = response.bytes().await;
-    if r.is_err() {
-        return Err(DownloadError{range});
-    }
-
-    let mut content: Vec<u8> = r.unwrap().to_vec();
-
-    if HashRange::EXTENSION == "xz" {
-        // extract the payload, delete carriage returns, recompress
-        let mut plain = extract_gz(content.as_slice()).unwrap();
-        plain.retain(|&x| x != b'\r');
-        content = compress_xz(plain.as_slice()).unwrap();
-    }
-
-    Ok(HashRange{
-        range,
-        etag: etag_u64,
-        compressed: content,
-    })
-}

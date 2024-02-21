@@ -1,26 +1,13 @@
-// #![feature(test)]
-
-
 use std::{fs, thread};
 use std::ops::{Index, IndexMut, Range};
-use std::str::Utf8Error;
-use std::sync::Arc;
-use std::thread::{available_parallelism, JoinHandle};
-use std::time::Duration;
-use reqwest::Error;
-use hibp_core::{HASH, hash_password, HashAndPassword};
-// use hibp_core::batch_transform::ConcurrentIterator;
-// use hibp_core::thread_pool::ThreadPool;
-
-// extern crate test;
+use tokio::runtime::Builder;
 
 const DIR_SRC_DATA: &str = "src/data";
 const DIR_TESTS_DATA: &str = "tests/data";
 
 
 use std::io::Read;
-use reqwest::header::HeaderName;
-
+use hibp_core::{download_range, HashRange};
 
 #[test]
 fn test_test_data_directory() {
@@ -32,63 +19,20 @@ fn test_test_data_directory() {
     assert!(result.unwrap().is_dir());
 }
 
-
-struct ThreadPool {
-    pool: Vec<JoinHandle<()>>,
-}
-
-impl ThreadPool {
-    pub fn new(size: usize) {
-        let mut inst = Self{
-            pool: Vec::new(),
-        };
-
-        for _ in 0..size {
-            inst.pool.push(thread::spawn(move || {
-                // do something
-            }));
-        }
-    }
-}
-
-impl Drop for ThreadPool {
-    fn drop(&mut self) {
-        // for handle in self.pool.into_iter() {
-        //     let _ = handle.join();
-        // }
-        for handle in self.pool.drain(..) {
-            let _ = handle.join();
-        }
-        while let Some(handle) = self.pool.pop() {
-            let _ = handle.join();
-        }
-    }
-}
-
-
 #[test]
 fn test_arbitrary_code_snippet() {
 
-    // let mut handles = Vec::new();
-    let mut tp = ThreadPool{
-        pool: Vec::new(),
-    };
-    tp.pool.push(thread::spawn(move || {
-        // let mut data = snd_rx.recv().unwrap();
-        // data += 1;
-        // let _ = rcv_tx.send(data);
-    }));
-
-    // for handle in tp.pool.into_iter().rev() {
-    //     let _ = handle.join();
-    // }
-
-    while let Some(handle) = tp.pool.pop() {
-        let _ = handle.join();
-    }
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
 
 
+    let client = reqwest::Client::new();
 
+    let result = rt.block_on(download_range(&client, 0));
+
+    assert!(result.is_ok());
 }
 
 mod tests {
@@ -102,7 +46,7 @@ mod tests {
 
     #[test]
     fn test_interpolation_search() {
-        let mut db = HIBPDB::new(db_directory());
+        let mut db = HIBPDB::new(db_directory()).unwrap();
 
         let mut view = String::from("");
 

@@ -12,6 +12,7 @@ use std::io::{Read, Write};
 use std::panic::UnwindSafe;
 use std::path::PathBuf;
 use std::str::Utf8Error;
+use chrono::DateTime;
 use flate2::Compression;
 use flate2::write::GzEncoder;
 use xz2::read::XzDecoder;
@@ -31,22 +32,9 @@ pub struct DownloadError {
     range: u32,
 }
 
-pub struct GenericError {
-    err: Box<dyn Any>,
-}
-
-impl Debug for GenericError {
+impl Debug for DownloadError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        // f.write_str(self.err.as)
-        Ok(())
-    }
-}
-
-impl From<reqwest::Error> for GenericError {
-    fn from(value: reqwest::Error) -> Self {
-        GenericError{
-            err: Box::new(value),
-        }
+        f.write_str(format!("{:05X}", self.range).as_str())
     }
 }
 
@@ -244,22 +232,62 @@ impl InterpolationSearch<HASH> for [HASH] {
 }
 
 
-// pub fn dirMap(path: &str) -> std::io::Result<BTreeMap<String, DirEntry>> {
-//     let mut map: BTreeMap<String, DirEntry> = BTreeMap::new();
-//
-//     for entry in std::fs::read_dir(path)? {
-//         let dir_entry = entry?;
-//         let path = dir_entry.path();
-//         if path.is_file() {
-//             if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
-//                 map.insert(filename.to_owned(), dir_entry);
-//             }
-//         }
-//     }
-//
-//     return Ok(map);
-// }
+pub struct HashRange {
+    pub range: u32,
+    pub etag: u64,
+    pub timestamp: i64,
+    pub compressed: Vec<u8>,
+}
 
+impl HashRange {
+    pub const EXTENSION: &'static str = "gz";
+
+    pub fn name(&self) -> String {
+        return format!("{:05X}.{}", self.range, Self::EXTENSION);
+    }
+
+}
+
+pub async fn download_range(client: &reqwest::Client, range: u32) -> Result<HashRange, DownloadError> {
+    let base_url = "https://api.pwnedpasswords.com/range/X?mode=ntlm";
+    let t = format!("{:05X}", range);
+    let url = base_url.replace("X", t.as_str());
+
+    let r = client.get(url)
+        .header(reqwest::header::ACCEPT_ENCODING, "gzip")
+        .send()
+        .await;
+
+    if r.is_err() {
+        return Err(DownloadError{ range });
+    }
+    let response = r.unwrap();
+
+    let h = response.headers();
+    let mut etag = h.get("etag").unwrap().to_str().unwrap();
+    let prefix = "W/\"0x";
+    if etag.starts_with(prefix) {
+        etag = &etag[prefix.len()..etag.len()-1]
+    }
+    let etag_u64 = u64::from_str_radix(etag, 16).unwrap();
+
+    let t = h.get("last-modified").unwrap().to_str().unwrap();
+    let timestamp = DateTime::parse_from_rfc2822(t).unwrap().timestamp();
+
+    let r = response.bytes().await;
+    if r.is_err() {
+        return Err(DownloadError{range});
+    }
+
+    let mut content: Vec<u8> = r.unwrap().to_vec();
+
+    Ok(HashRange{
+        range,
+        etag: etag_u64,
+        timestamp,
+        compressed: content,
+    })
+}
 
 pub fn dir_list(path: &str) -> std::io::Result<Vec<String>> {
     let mut list: Vec<String> = Vec::new();

@@ -89,7 +89,7 @@ impl<'a> HIBPDB<'a> {
         let pathname = prefix+fname.as_str();
         {
             let mut fd = File::create(&path_tmp)?;
-            fd.write_all(hr.compressed.as_slice())?;
+            fd.write_all(hr.buff.as_slice())?;
         }
         fs::rename(path_tmp, pathname)?;
 
@@ -217,6 +217,8 @@ impl<'a> HIBPDB<'a> {
             .truncate(true)
             .open(self.dbdir.clone()+"/index.bin")?;
 
+
+        // let transformer: TransformSerial<u32, HashRange> = TransformSerial::new(|v| {});
         self.rt.block_on(async {
             let mut queue = FuturesOrdered::new();
             let limit = 1000;

@@ -4,7 +4,7 @@ use std::{fs};
 const DIR_TESTS_DATA: &str = "tests/data";
 
 
-use hibp_core::{download_range};
+use hibp_core::{download_range, HashRange};
 
 #[test]
 fn test_test_data_directory() {
@@ -26,8 +26,20 @@ fn test_arbitrary_code_snippet() {
     let client = reqwest::Client::new();
 
     let result = rt.block_on(download_range(&client, 0));
-
     assert!(result.is_ok());
+
+    let hr = result.unwrap();
+
+    let buff = hr.serialize();
+    let result = HashRange::deserialize(buff.as_slice());
+    assert!(result.is_ok());
+
+    let hrr = result.unwrap();
+
+    assert_eq!(hr.range,     hrr.range);
+    assert_eq!(hr.etag,      hrr.etag);
+    assert_eq!(hr.timestamp, hrr.timestamp);
+    assert_eq!(hr.buff,      hrr.buff);
 }
 
 mod tests {

@@ -1,9 +1,10 @@
 pub mod db;
+mod batch_transform;
 
 use std::fmt::{Debug, Formatter};
 use std::mem::{size_of};
-use std::{slice};
-use std::io::{Read, Write};
+use std::{io, slice};
+use std::io::{ErrorKind, Read, Write};
 use std::panic::UnwindSafe;
 use std::str::Utf8Error;
 use chrono::DateTime;
@@ -14,6 +15,7 @@ use xz2::read::XzDecoder;
 use md4::{Digest, Md4};
 use rand::{RngCore, SeedableRng};
 use xz2::write::XzEncoder;
+use serde::{Serialize, Deserialize};
 
 pub type HASH = [u8; 16];
 
@@ -228,11 +230,14 @@ impl InterpolationSearch<HASH> for [HASH] {
 }
 
 
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct HashRange {
     pub range: u32,
     pub etag: u64,
     pub timestamp: i64,
-    pub compressed: Vec<u8>,
+    #[serde(skip)]
+    pub buff: Vec<u8>,
 }
 
 impl HashRange {
@@ -242,6 +247,29 @@ impl HashRange {
         return format!("{:05X}.{}", self.range, Self::EXTENSION);
     }
 
+    pub fn deserialize(buff: &[u8]) -> io::Result<Self> {
+        let size = u16::from_le_bytes(buff[0..2].try_into().unwrap()) as usize;
+        let meta = serde_cbor::from_slice::<HashRange>(&buff[2usize..2usize+size]);
+        return match meta {
+            Ok(mut hr) => {
+                hr.buff.extend_from_slice(&buff[2+size..]);
+                Ok(hr)
+            }
+            Err(e) => Err(io::Error::new(ErrorKind::InvalidInput, e)),
+        }
+    }
+
+    pub fn serialize(&self) -> Vec<u8> {
+        let mut payload: Vec<u8> = Vec::new();
+
+        let mut meta = serde_cbor::to_vec(&self).unwrap();
+        let size = meta.len() as u16;
+        payload.extend_from_slice(&size.to_le_bytes());
+        payload.extend(&meta);
+        payload.extend(&self.buff);
+
+        payload
+    }
 }
 
 pub async fn download_range(client: &reqwest::Client, range: u32) -> Result<HashRange, DownloadError> {
@@ -281,7 +309,7 @@ pub async fn download_range(client: &reqwest::Client, range: u32) -> Result<Hash
         range,
         etag: etag_u64,
         timestamp,
-        compressed: content,
+        buff: content,
     })
 }
 

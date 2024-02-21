@@ -1,7 +1,5 @@
-use std::cmp::min;
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::{Read, Write};
+use std::io::{Write};
 use hibp_core::*;
 
 use std::time::{Duration, Instant};
@@ -14,7 +12,7 @@ use hibp_core::db::HIBPDB;
 pub fn timeit<F>(min_runtime: Duration, mut inner: F) -> u64
     where F: FnMut(),
 {
-    let mut rate = 0u64;
+    let mut rate;
     let mut loopit = 1;
 
     let total = Instant::now();
@@ -111,7 +109,7 @@ fn main() {
     let min_runtime = Duration::from_secs_f64(args.runtime);
     let mut b = Benchmarker{job: HashMap::new(), args: Args::parse()};
 
-    b.register("StdRng", |args| {
+    b.register("StdRng", |_| {
         let mut rng = rand::rngs::StdRng::from_entropy();
 
         return Box::new(move || {
@@ -119,7 +117,7 @@ fn main() {
         });
     });
 
-    b.register("rng_bytes", |args| {
+    b.register("rng_bytes", |_| {
         let item_size = 16;
         let mut pool: Vec<u8> = vec![0u8; item_size* BUFFER_SIZE];
         let threshold = pool.len();
@@ -140,7 +138,7 @@ fn main() {
         })
     });
 
-    b.register("rng_hash", |args| {
+    b.register("rng_hash", |_| {
         let mut rng: RandomItemGenerator<HASH> = RandomItemGenerator::new(BUFFER_SIZE);
 
         return Box::new(move || {
@@ -148,25 +146,25 @@ fn main() {
         });
     });
 
-    b.register("utf8_to_utf16", |args| {
+    b.register("utf8_to_utf16", |_| {
         return Box::new(move || {
             encode_to_utf16le("");
         });
     });
 
-    b.register("md4_crate", |args| {
+    b.register("md4_crate", |_| {
         let raw: HASH = Default::default();
 
         return Box::new(move || {
             let mut hasher = Md4::new();
             md4::Digest::update(&mut hasher, raw);
-            let mut hash: &mut [u8; 16] = &mut Default::default();
+            let hash: &mut [u8; 16] = &mut Default::default();
             hash.copy_from_slice(hasher.finalize().as_slice());
         });
     });
 
     b.register("dbquery_inmemory", |args| {
-        let mut db = HIBPDB::new(args.dbdirectory.clone()).unwrap();
+        let db = HIBPDB::new(args.dbdirectory.clone()).unwrap();
         let mut rng = RandomItemGenerator::new(BUFFER_SIZE);
 
         let mut index_slice: Vec<HASH> = Vec::new();
@@ -185,7 +183,7 @@ fn main() {
     });
 
     b.register("dbquery_miss_binary_search", |args| {
-        let mut db = HIBPDB::new(args.dbdirectory.clone()).unwrap();
+        let db = HIBPDB::new(args.dbdirectory.clone()).unwrap();
         let mut rng = RandomItemGenerator::new(BUFFER_SIZE);
 
         return Box::new(move || {
@@ -195,7 +193,7 @@ fn main() {
     });
 
     b.register("dbquery_miss_interpolation_search", |args| {
-        let mut db = HIBPDB::new(args.dbdirectory.clone()).unwrap();
+        let  db = HIBPDB::new(args.dbdirectory.clone()).unwrap();
         let mut rng = RandomItemGenerator::new(BUFFER_SIZE);
 
         return Box::new(move || {
@@ -206,7 +204,7 @@ fn main() {
     });
 
     b.register("dbquery_hit_binary_search", |args| {
-        let mut db = HIBPDB::new(args.dbdirectory.clone()).unwrap();
+        let db = HIBPDB::new(args.dbdirectory.clone()).unwrap();
         let mut rng = RandomItemGenerator::<usize>::new(BUFFER_SIZE);
 
         return Box::new(move || {
@@ -218,7 +216,7 @@ fn main() {
     });
 
     b.register("dbquery_hit_interpolation_search", |args| {
-        let mut db = HIBPDB::new(args.dbdirectory.clone()).unwrap();
+        let db = HIBPDB::new(args.dbdirectory.clone()).unwrap();
         let mut rng = RandomItemGenerator::<usize>::new(BUFFER_SIZE);
 
         return Box::new(move || {
@@ -237,16 +235,5 @@ fn main() {
         for name in &args.benchmark {
             b.run(name.as_str(), min_runtime);
         }
-    }
-}
-
-fn preload(arr: &[u8]) {
-    let mut buff = [0u8; 1<<16];
-
-    let mut off = 0;
-    while off < arr.len() {
-        let len = min(arr.len()-off, buff.len());
-        buff[0..len].copy_from_slice(&arr[off..off+len]);
-        off += len;
     }
 }

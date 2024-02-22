@@ -8,7 +8,7 @@ use bit_set::BitSet;
 
 use futures::stream::{FuturesUnordered};
 use futures::StreamExt;
-use crate::batch_transform::{Transform, TransformSerial};
+use crate::transform::{Transform, TransformSerial};
 
 pub struct FileArray<'a, T> {
     pub pathname: String,

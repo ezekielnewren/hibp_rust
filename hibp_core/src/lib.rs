@@ -1,11 +1,10 @@
 pub mod db;
-mod transform;
+pub mod transform;
 
 use std::fmt::{Debug, Formatter};
 use std::mem::{size_of};
 use std::{io, slice};
 use std::io::{BufRead, ErrorKind, Read, Write};
-use std::panic::UnwindSafe;
 use std::str::Utf8Error;
 use chrono::DateTime;
 use flate2::Compression;
@@ -59,45 +58,6 @@ pub fn compress_xz(plain: &[u8]) -> std::io::Result<Vec<u8>> {
     let mut compressor = XzEncoder::new(Vec::new(), 6);
     compressor.write_all(plain)?;
     return compressor.finish();
-}
-
-pub struct Job {
-    pub closure: Box<dyn FnOnce()>,
-}
-
-unsafe impl Send for Job {}
-impl UnwindSafe for Job {}
-
-impl Job {
-
-    pub fn new<F>(job: F) -> Job where F: FnOnce() + 'static {
-        Self {
-            closure: Box::new(job),
-        }
-    }
-
-    pub fn invoke(self) {
-        (self.closure)();
-    }
-}
-
-pub struct Transform<From, To> {
-    lambda: Box<dyn Fn(From) -> To>,
-}
-
-unsafe impl<From, To> Send for Transform<From, To> {}
-
-impl<From, To> Transform<From, To> {
-
-    pub fn new<F>(transform: F) -> Transform<From, To> where F: Fn(From) -> To + 'static {
-        Self {
-            lambda: Box::new(transform),
-        }
-    }
-
-    pub fn call_lambda(self, item: From) -> To {
-        (self.lambda)(item)
-    }
 }
 
 pub struct RandomItemGenerator<'a, T: Default + Copy> {

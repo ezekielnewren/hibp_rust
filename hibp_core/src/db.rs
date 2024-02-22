@@ -8,7 +8,7 @@ use bit_set::BitSet;
 
 use futures::stream::{FuturesUnordered};
 use futures::StreamExt;
-use crate::transform::{Transform, TransformSerial};
+use crate::transform::{Transform, TransformConcurrent};
 
 pub struct FileArray<'a, T> {
     pub pathname: String,
@@ -166,7 +166,8 @@ impl<'a> HIBPDB<'a> {
             .open(self.dbdir.clone()+"/index.bin")?;
 
 
-        let mut transformer: TransformSerial<HashRange, io::Result<Vec<u8>>> = TransformSerial::new(convert_range);
+        // let mut transformer: TransformSerial<HashRange, io::Result<Vec<u8>>> = TransformSerial::new(convert_range);
+        let mut transformer: TransformConcurrent<HashRange, io::Result<Vec<u8>>> = TransformConcurrent::new(convert_range, 0);
 
         let limit = 1000;
 

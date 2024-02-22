@@ -5,6 +5,7 @@ const DIR_TESTS_DATA: &str = "tests/data";
 
 
 use hibp_core::{download_range, HashRange};
+use hibp_core::transform::{Transform, TransformSerial};
 
 #[test]
 fn test_test_data_directory() {
@@ -15,7 +16,39 @@ fn test_test_data_directory() {
 }
 
 #[test]
-fn test_arbitrary_code_snippet() {
+fn test_transform_serial() {
+
+    let c: fn(u64) -> u64 = |v| v+1;
+
+    let mut t = TransformSerial::new(c);
+    let input = 0u64;
+    t.add(input);
+    let output = t.take();
+
+    assert_eq!(input + 1, output);
+}
+
+#[test]
+fn test_transform_concurrent() {
+
+    let c: fn(u64) -> u64 = |v| v+1;
+
+    let mut t = TransformSerial::new(c);
+
+
+    let hi = num_cpus::get() as u64;
+    for input in 0u64..hi {
+        t.add(input);
+    }
+
+    for i in 0u64..hi {
+        let output = t.take();
+        assert_eq!(i+1, output);
+    }
+}
+
+#[test]
+fn test_download() {
 
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()

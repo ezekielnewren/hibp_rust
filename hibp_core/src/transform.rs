@@ -62,7 +62,7 @@ impl<From, To> Transform<From, To> for TransformConcurrent<From, To> {
 
     fn take(&mut self) -> To {
         let mut data = self.mutex.lock().unwrap();
-        if data.rp >= data.wp {
+        if data.rp > data.wp {
             panic!("transform item under flow");
         }
 

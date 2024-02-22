@@ -40,7 +40,7 @@ impl<T> Ord for MinHeapItem<T> {
 }
 
 pub struct TransformConcurrentData<From, To> {
-    pub in_queue: VecDeque<From>,
+    pub in_queue: VecDeque<MinHeapItem<From>>,
     pub out_queue: BinaryHeap<MinHeapItem<To>>,
     pub wp: u64,
     pub rp: u64,
@@ -56,13 +56,18 @@ pub struct TransformConcurrent<From, To> {
 impl<From, To> Transform<From, To> for TransformConcurrent<From, To> {
     fn add(&mut self, item: From) {
         let mut data = self.mutex.lock().unwrap();
-        data.in_queue.push_back(item);
+        let wp = data.wp;
+        data.in_queue.push_back(MinHeapItem{
+            priority: wp,
+            item
+        });
+        data.wp += 1;
         self.in_cond.notify_one();
     }
 
     fn take(&mut self) -> To {
         let mut data = self.mutex.lock().unwrap();
-        if data.rp > data.wp {
+        if data.rp >= data.wp {
             panic!("transform item under flow");
         }
 
@@ -106,7 +111,7 @@ impl<From: 'static, To: 'static> TransformConcurrent<From, To> {
             let transform = at.clone();
             let w = Worker::new(move || {
                 loop {
-                    let item: From;
+                    let item: MinHeapItem<From>;
                     {
                         let mut data = mutex.lock().unwrap();
 
@@ -116,15 +121,13 @@ impl<From: 'static, To: 'static> TransformConcurrent<From, To> {
 
                         item = data.in_queue.pop_front().unwrap();
                     }
-                    let out = transform(item);
+                    let out = transform(item.item);
                     {
                         let mut data = mutex.lock().unwrap();
-                        let priority = data.wp;
                         data.out_queue.push(MinHeapItem{
-                            priority,
+                            priority: item.priority,
                             item: out,
                         });
-                        data.wp += 1;
                         out_cond.notify_one();
                     }
                 }

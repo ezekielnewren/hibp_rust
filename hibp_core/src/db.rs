@@ -97,8 +97,7 @@ impl<'a> HIBPDB<'a> {
         Ok(())
     }
 
-    pub fn load(&self, range: u32) -> io::Result<HashRange> {
-        let prefix: String = self.dbdir.clone()+"/range/";
+    pub fn load(prefix: String, range: u32) -> io::Result<HashRange> {
         let file_name = HashRange::name(range);
 
         let mut buff: Vec<u8> = Vec::new();
@@ -168,14 +167,7 @@ impl<'a> HIBPDB<'a> {
 
         let prefix: String = self.dbdir.clone()+"/range/";
         let mut transformer: TransformConcurrent<u32, io::Result<Vec<u8>>> = TransformConcurrent::new(move |range| {
-            let file_name = HashRange::name(range);
-
-            let mut buff: Vec<u8> = Vec::new();
-            let mut fd = File::open(prefix.clone()+file_name.as_str())?;
-            fd.read_to_end(&mut buff)?;
-
-            let hr = HashRange::deserialize(buff.as_slice())?;
-            return convert_range(hr);
+            return convert_range(Self::load(prefix.clone(), range)?);
         }, 0);
 
         let limit = 1000;

@@ -166,8 +166,17 @@ impl<'a> HIBPDB<'a> {
             .open(self.dbdir.clone()+"/index.bin")?;
 
 
-        // let mut transformer: TransformSerial<HashRange, io::Result<Vec<u8>>> = TransformSerial::new(convert_range);
-        let mut transformer: TransformConcurrent<HashRange, io::Result<Vec<u8>>> = TransformConcurrent::new(convert_range, 0);
+        let prefix: String = self.dbdir.clone()+"/range/";
+        let mut transformer: TransformConcurrent<u32, io::Result<Vec<u8>>> = TransformConcurrent::new(move |range| {
+            let file_name = HashRange::name(range);
+
+            let mut buff: Vec<u8> = Vec::new();
+            let mut fd = File::open(prefix.clone()+file_name.as_str())?;
+            fd.read_to_end(&mut buff)?;
+
+            let hr = HashRange::deserialize(buff.as_slice())?;
+            return convert_range(hr);
+        }, 0);
 
         let limit = 1000;
 
@@ -175,7 +184,7 @@ impl<'a> HIBPDB<'a> {
         let mut rp = 0u32;
         while rp < 1<<20 {
             if wp < (1<<20) && wp-rp < limit {
-                transformer.add(self.load(wp)?);
+                transformer.add(wp);
                 wp += 1;
             } else {
                 let buff = transformer.take()?;

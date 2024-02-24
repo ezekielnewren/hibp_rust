@@ -228,6 +228,20 @@ fn main() {
         })
     });
 
+    b.register("range_read", |args| {
+        let prefix = args.dbdirectory.clone()+"/range/";
+        // let mut rng = RandomItemGenerator::<usize>::new(BUFFER_SIZE);
+
+        let mut i = 0;
+
+        return Box::new(move || {
+            if i < (1<<20) {
+                let _ = HIBPDB::load(prefix.clone(), i);
+            }
+            i += 1;
+        })
+    });
+
     let args = Args::parse();
     if args.benchmark.is_empty() {
         b.run_all(min_runtime);

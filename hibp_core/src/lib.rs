@@ -1,5 +1,6 @@
 pub mod db;
 pub mod transform;
+pub mod minbitrep;
 
 use std::fmt::{Debug, Formatter};
 use std::mem::{size_of};
@@ -17,6 +18,13 @@ use xz2::write::XzEncoder;
 use serde::{Serialize, Deserialize};
 
 pub type HASH = [u8; 16];
+
+#[macro_export]
+macro_rules! divmod {
+    ($dividend:expr, $divisor:expr) => {
+        (($dividend / $divisor), ($dividend % $divisor))
+    };
+}
 
 #[allow(non_snake_case)]
 pub fn HASH_to_hex(v: &HASH) -> String {

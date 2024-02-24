@@ -81,8 +81,7 @@ impl<'a> HIBPDB<'a> {
         })
     }
 
-    pub fn save(&self, hr: HashRange) -> io::Result<()> {
-        let prefix: String = self.dbdir.clone()+"/range/";
+    pub fn save(prefix: String, hr: HashRange) -> io::Result<()> {
         let file_name = HashRange::name(hr.range);
 
         let path_tmp = prefix.clone()+"tmp."+file_name.as_str();
@@ -138,7 +137,7 @@ impl<'a> HIBPDB<'a> {
                     match result {
                         Ok(v) => {
                             f(v.range);
-                            self.save(v).unwrap();
+                            Self::save(dir_range.clone(), v).unwrap();
                         }
                         Err(err) => {
                             queue.push(download_range(&client, err.range));

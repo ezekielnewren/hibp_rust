@@ -1,4 +1,4 @@
-use std::cmp::min;
+use std::cmp::{max, min};
 use crate::divmod;
 
 pub struct MinBitRep<'a> {
@@ -8,17 +8,23 @@ pub struct MinBitRep<'a> {
 
 
 impl<'a> MinBitRep<'a> {
-
-    pub fn calculate_array_size(len: usize, bit_len: u8) -> usize {
-        (len*bit_len as usize+7)/8
+    pub fn minbit(x: u64) -> u64 {
+        max(64-u64::leading_zeros(x) as u64, 1)
     }
 
-    pub fn wrap(a: &'a mut[u8], bit_len: u8) -> Self {
+    pub fn calculate_array_size(len: usize, max_value: u64) -> usize {
+        let bit_len = Self::minbit(max_value) as usize;
+        (len*bit_len+7)/8
+    }
+
+    pub fn wrap(a: &'a mut[u8], max_value: u64) -> Self {
+        let bit_len = Self::minbit(max_value) as usize;
         Self {
             a,
-            bit_len: bit_len as usize,
+            bit_len,
         }
     }
+
 
     pub fn get(&self, index: usize) -> u64 {
         if index >= self.len() {

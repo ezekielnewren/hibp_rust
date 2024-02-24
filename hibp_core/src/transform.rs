@@ -9,6 +9,8 @@ pub trait Transform<From, To> {
 
     fn add(&mut self, item: From);
 
+    fn poll(&mut self) -> Option<To>;
+
     fn take(&mut self) -> To;
 
 }
@@ -63,6 +65,24 @@ impl<From, To> Transform<From, To> for TransformConcurrent<From, To> {
         });
         data.wp += 1;
         self.in_cond.notify_one();
+    }
+
+    fn poll(&mut self) -> Option<To> {
+        let mut data = self.mutex.lock().unwrap();
+        if data.rp >= data.wp {
+            panic!("transform item under flow");
+        }
+
+        if data.out_queue.is_empty() {
+            return None;
+        }
+
+        if data.out_queue.peek().unwrap().priority != data.rp {
+            data.rp += 1;
+            return Some(data.out_queue.pop().unwrap().item);
+        }
+
+        return None;
     }
 
     fn take(&mut self) -> To {
@@ -183,6 +203,10 @@ impl<From, To> TransformSerial<From, To> {
 impl<From, To> Transform<From, To> for TransformSerial<From, To> {
     fn add(&mut self, item: From) {
         self.queue.push_back(item);
+    }
+
+    fn poll(&mut self) -> Option<To> {
+        Some(self.take())
     }
 
     fn take(&mut self) -> To {

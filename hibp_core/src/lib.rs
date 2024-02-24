@@ -205,6 +205,7 @@ pub struct HashRange {
     pub etag: u64,
     pub timestamp: i64,
     pub len: u64,
+    pub sum: u64,
     pub format: String,
     #[serde(skip)]
     pub buff: Vec<u8>,
@@ -278,6 +279,7 @@ pub async fn download_range(client: &reqwest::Client, range: u32) -> Result<Hash
         etag: etag_u64,
         timestamp,
         len: 0,
+        sum: 0,
         format: String::from("gz"),
         buff: content,
     })

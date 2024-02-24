@@ -1,13 +1,15 @@
 use std::{fs, io};
 use std::fs::{File, OpenOptions};
-use std::io::{Read, Write};
+use std::io::{BufRead, ErrorKind, Read, Write};
 use std::mem::size_of;
+use std::path::Path;
 use memmap2::{MmapMut, MmapOptions};
-use crate::{convert_range, dir_list, download_range, HASH, HashRange, InterpolationSearch};
+use crate::{compress_xz, convert_range, dir_list, download_range, DownloadError, extract_gz, extract_xz, HASH, HashRange, InterpolationSearch};
 use bit_set::BitSet;
 
 use futures::stream::{FuturesUnordered};
 use futures::StreamExt;
+use rayon::prelude::*;
 use crate::transform::{Transform, TransformConcurrent};
 
 pub struct FileArray<'a, T> {
@@ -106,54 +108,93 @@ impl<'a> HIBPDB<'a> {
         return HashRange::deserialize(buff.as_slice());
     }
 
+    pub fn compact(hr: &HashRange) -> io::Result<HashRange> {
+        let mut copy = HashRange {
+            range: hr.range,
+            etag: hr.etag,
+            timestamp: hr.timestamp,
+            len: 0,
+            sum: 0,
+            format: hr.format.clone(),
+            buff: Vec::new(),
+        };
+
+        copy.buff = match hr.format.as_str() {
+            "xz" => extract_xz(hr.buff.as_slice())?,
+            "gz" => extract_gz(hr.buff.as_slice())?,
+            "txt" => hr.buff.clone(),
+            _ => return Err(io::Error::new(ErrorKind::InvalidInput, "unsupported file type")),
+        };
+
+        copy.buff.retain(|&x| x != b'\r');
+
+        for v in copy.buff.lines() {
+            let line = v?;
+            let t = u64::from_str_radix(&line[33-5..], 16);
+            match t {
+                Ok(v) => copy.sum += 1,
+                Err(e) => return Err(io::Error::new(ErrorKind::InvalidInput, e.to_string())),
+            }
+
+            copy.len += 1;
+        }
+
+        copy.buff = compress_xz(copy.buff.as_slice())?;
+        copy.format = String::from("xz");
+
+        Ok(copy)
+    }
+
     pub fn update<F>(self: &Self, mut f: F) -> io::Result<()> where F: FnMut(u32)  {
         let dir_range = self.dbdir.clone()+"/range/";
         fs::create_dir_all(dir_range.clone()).unwrap();
 
-        let limit = 500;
+        let limit0 = 500;
+        let limit1 = rayon::current_num_threads()*10;
         let client = reqwest::Client::new();
 
         let fut = async {
-            let mut queue = FuturesUnordered::new();
+            let prefix = Path::new(dir_range.as_str());
 
-            let ls = dir_list(dir_range.as_str()).unwrap();
-            let mut bs = BitSet::new();
-            for key in ls {
-                let t = u32::from_str_radix(&key[0..5], 16).unwrap();
-                bs.insert(t as usize);
-            }
+            let mut queue0 = FuturesUnordered::new();
+            let mut queue1: Vec<HashRange> = Vec::new();
 
-            let mut i = 0u32;
+            let mut range = 0;
             loop {
-                if i<(1<<20) && queue.len() < limit {
-                    if !bs.contains(i as usize) {
-                        queue.push(download_range(&client, i));
+                if queue0.len() < limit0 && range < (1<<20) {
+                    if !prefix.join(HashRange::name(range)).exists() {
+                        queue0.push(download_range(&client, range));
                     }
-                    i += 1;
-                    continue;
-                }
-
-                if let Some(result) = queue.next().await {
+                    range += 1;
+                } else {
+                    let result = queue0.next().await.unwrap();
                     match result {
-                        Ok(v) => {
-                            f(v.range);
-                            Self::save(dir_range.clone(), v).unwrap();
-                        }
-                        Err(err) => {
-                            queue.push(download_range(&client, err.range));
-                        }
+                        Ok(hr) => queue1.push(hr),
+                        Err(e) => queue0.push(download_range(&client, e.range)),
                     }
                 }
 
-                if i >= (1<<20) && queue.is_empty() {
+                let downloaded = range >= (1<<20) && queue0.is_empty();
+                if downloaded || queue1.len() >= limit1 {
+                    queue1.par_iter().for_each(|hr| {
+                        let compact = Self::compact(&hr).unwrap();
+                        Self::save(dir_range.clone(), compact).unwrap();
+                    });
+                    for r in &queue1 {
+                        f(r.range);
+                    }
+                    queue1.clear();
+                }
+
+                if downloaded {
                     break;
                 }
             }
+
+            Ok(())
         };
 
-        self.rt.block_on(fut);
-
-        Ok(())
+        self.rt.block_on(fut)
     }
 
     pub fn construct_index<F>(&self, mut f: F) -> io::Result<()> where F: FnMut(u32) {

@@ -1,5 +1,6 @@
 use std::cmp::{max, min};
 use crate::divmod;
+use crate::indexbycopy::{IndexByCopy, IndexByCopyMut};
 
 pub struct MinBitRep<'a> {
     pub a: &'a mut[u8],
@@ -24,9 +25,11 @@ impl<'a> MinBitRep<'a> {
             bit_len,
         }
     }
+}
 
+impl<'a> IndexByCopy<u64> for MinBitRep<'a> {
 
-    pub fn get(&self, index: usize) -> u64 {
+    fn get(&mut self, index: usize) -> u64 {
         if index >= self.len() {
             panic!("index out of bounds");
         }
@@ -46,8 +49,13 @@ impl<'a> MinBitRep<'a> {
 
         return out;
     }
+    fn len(&mut self) -> usize {
+        self.a.len()*8/self.bit_len
+    }
+}
 
-    pub fn set(&mut self, index: usize, mut value: u64) {
+impl<'a> IndexByCopyMut<u64> for MinBitRep<'a> {
+    fn set(&mut self, index: usize, mut value: u64) {
         if index >= self.len() {
             panic!("index out of bounds");
         }
@@ -70,12 +78,7 @@ impl<'a> MinBitRep<'a> {
             shift += write;
         }
     }
-
-    pub fn len(&self) -> usize {
-        self.a.len()*8/self.bit_len
-    }
 }
-
 
 
 

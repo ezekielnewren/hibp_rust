@@ -4,8 +4,7 @@ use std::io::{BufRead, ErrorKind, Read, Write};
 use std::mem::size_of;
 use std::path::Path;
 use memmap2::{MmapMut, MmapOptions};
-use crate::{compress_xz, convert_range, dir_list, download_range, DownloadError, extract_gz, extract_xz, HASH, HashRange, InterpolationSearch};
-use bit_set::BitSet;
+use crate::{compress_xz, convert_range, download_range, extract_gz, extract_xz, HASH, HashRange, InterpolationSearch};
 
 use futures::stream::{FuturesUnordered};
 use futures::StreamExt;
@@ -132,7 +131,7 @@ impl<'a> HIBPDB<'a> {
             let line = v?;
             let t = u64::from_str_radix(&line[33-5..], 16);
             match t {
-                Ok(v) => copy.sum += 1,
+                Ok(_) => copy.sum += 1,
                 Err(e) => return Err(io::Error::new(ErrorKind::InvalidInput, e.to_string())),
             }
 

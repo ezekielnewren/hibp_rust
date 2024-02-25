@@ -1,6 +1,7 @@
 pub mod db;
 pub mod transform;
 pub mod minbitrep;
+pub mod indexbycopy;
 
 use std::fmt::{Debug, Formatter};
 use std::mem::{size_of};

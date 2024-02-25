@@ -1,3 +1,4 @@
+use hibp_core::indexbycopy::{IndexByCopy, IndexByCopyMut};
 use hibp_core::minbitrep::MinBitRep;
 
 #[test]

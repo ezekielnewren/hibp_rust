@@ -28,7 +28,7 @@ struct Args {
 
 fn ingest(args: Args) {
     let dbdir = PathBuf::from(args.dbdirectory);
-    let mut db = HIBPDB::new(dbdir.as_path()).unwrap();
+    let mut db = HIBPDB::open(dbdir.as_path()).unwrap();
 
     let mut stdin = BufReader::new(io::stdin());
     let mut buff: Vec<u8> = Vec::new();
@@ -93,7 +93,7 @@ fn update(args: Args) {
 
 fn construct(args: Args) {
     let dbdir = PathBuf::from(args.dbdirectory);
-    let db = HIBPDB::new(dbdir.as_path()).unwrap();
+    let db = HIBPDB::open(dbdir.as_path()).unwrap();
 
     let status: fn(u32) = |range| {
         println!("{:05X}", range);
@@ -104,7 +104,7 @@ fn construct(args: Args) {
 
 fn test(args: Args) {
     let dbdir = PathBuf::from(args.dbdirectory);
-    let mut db = HIBPDB::new(dbdir.as_path()).unwrap();
+    let mut db = HIBPDB::open(dbdir.as_path()).unwrap();
 
     db.sort_freq().unwrap();
 }

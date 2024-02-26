@@ -70,15 +70,17 @@ impl<'a, T> FileArray<'a, T> {
 
 pub struct HIBPDB<'a> {
     pub dbdir: PathBuf,
-    pub index: Option<FileArray<'a, HASH>>,
+    pub index: FileArray<'a, HASH>,
     pub rt: tokio::runtime::Runtime,
 }
 
 impl<'a> HIBPDB<'a> {
-    pub fn new(v: &Path) -> io::Result<Self> {
+    pub fn open(v: &Path) -> io::Result<Self> {
+        let file_index = v.join("index.bin");
+
         Ok(Self {
             dbdir: PathBuf::from(v),
-            index: None,
+            index: FileArray::new(file_index.as_path(), 0)?,
             rt: tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .build()
@@ -202,9 +204,9 @@ impl<'a> HIBPDB<'a> {
         let file_freq = self.dbdir.join("frequency.bin");
         let file_freq_index = self.dbdir.join("freq_index.bin");
 
-        let db_len = self.len()?;
+        let db_len = self.len();
 
-        let slice_index = self.index()?;
+        let slice_index = self.index();
 
         let fa_freq: FileArray<u64> = FileArray::new(file_freq.as_path(), 0)?;
         let slice_freq = fa_freq.as_slice();
@@ -281,21 +283,16 @@ impl<'a> HIBPDB<'a> {
     }
 
     #[inline]
-    pub fn index(&mut self) -> io::Result<&[HASH]> {
-        if self.index.is_none() {
-            let file_index = self.dbdir.join("index.bin");
-            self.index = Some(FileArray::new(file_index.as_path(), 0)?);
-        }
-        let fa: &FileArray<HASH> = self.index.as_ref().unwrap();
-        return Ok(fa.as_slice());
+    pub fn index(&self) -> &[HASH] {
+        self.index.as_slice()
     }
 
-    pub fn find(self: &mut Self, key: &HASH) -> io::Result<Result<usize, usize>> {
-        Ok(self.index()?.interpolation_search(key))
+    pub fn find(self: &mut Self, key: &HASH) -> Result<usize, usize> {
+        self.index().interpolation_search(key)
     }
 
-    pub fn len(&mut self) -> io::Result<usize> {
-        Ok(self.index()?.len())
+    pub fn len(&self) -> usize {
+        self.index().len()
     }
 }
 

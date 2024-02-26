@@ -20,6 +20,9 @@ struct Args {
 
     #[arg(short, long)]
     construct: bool,
+
+    #[arg(short, long)]
+    test: bool,
 }
 
 fn ingest(args: Args) {
@@ -77,7 +80,7 @@ fn ingest(args: Args) {
 }
 
 fn update(args: Args) {
-    let db = HIBPDB::new(args.dbdirectory).unwrap();
+    let mut db = HIBPDB::new(args.dbdirectory).unwrap();
 
     let status: fn(u32) = |range| {
         println!("{:05X}", range);
@@ -96,6 +99,16 @@ fn construct(args: Args) {
     db.construct_index(status).unwrap();
 }
 
+fn test(args: Args) {
+    let mut db = HIBPDB::new(args.dbdirectory).unwrap();
+
+    let status: fn(u32) = |range| {
+        println!("{:05X}", range);
+    };
+
+    db.sort_freq().unwrap();
+}
+
 fn main() {
     let args = Args::parse();
 
@@ -105,6 +118,8 @@ fn main() {
         update(args);
     } else if args.construct {
         construct(args);
+    } else if args.test {
+        test(args);
     }
 }
 

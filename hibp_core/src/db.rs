@@ -23,11 +23,14 @@ impl<'a, T> FileArray<'a, T> {
     pub fn new(_pathname: &Path, size: usize) -> std::io::Result<Self> {
         let fd = fs::OpenOptions::new()
             .create(true)
+            .read(true)
             .write(true)
-            .append(true)
+            .truncate(false)
             .open(_pathname)?;
 
-        fd.set_len((size * size_of::<T>()) as u64)?;
+        if size != 0 {
+            fd.set_len((size * size_of::<T>()) as u64)?;
+        }
 
         let mut mmap_mut = unsafe { MmapOptions::new().map_mut(&fd)? };
 
@@ -42,6 +45,10 @@ impl<'a, T> FileArray<'a, T> {
             mmap: mmap_mut,
             slice,
         })
+    }
+
+    pub fn sync(&mut self) -> io::Result<()> {
+        self.mmap.flush()
     }
 
     pub fn as_mut_slice(&mut self) -> &mut [T] {
@@ -144,7 +151,7 @@ impl<'a> HIBPDB<'a> {
         Ok(copy)
     }
 
-    pub fn update<F>(self: &Self, mut f: F) -> io::Result<()> where F: FnMut(u32)  {
+    pub fn update<F>(&mut self, mut f: F) -> io::Result<()> where F: FnMut(u32)  {
         let dir_range = self.dbdir.join("range/");
         fs::create_dir_all(dir_range.clone()).unwrap();
 
@@ -188,10 +195,41 @@ impl<'a> HIBPDB<'a> {
                 }
             }
 
-            Ok(())
+            Ok::<(), io::Error>(())
         };
 
         self.rt.block_on(fut)
+    }
+
+    pub fn sort_freq(&mut self) -> io::Result<()> {
+        let file_freq = self.dbdir.join("frequency.bin");
+        let file_freq_index = self.dbdir.join("freq_index.bin");
+
+        let db_len = self.len()?;
+
+        let slice_index = self.index()?;
+
+        let fa_freq: FileArray<u64> = FileArray::new(file_freq.as_path(), 0)?;
+        let slice_freq = fa_freq.as_slice();
+
+        let mut fa_freq_index: FileArray<u64> = FileArray::new(file_freq_index.as_path(), db_len)?;
+
+        let slice_freq_index = fa_freq_index.as_mut_slice();
+        for i in 0..slice_freq_index.len() {
+            slice_freq_index[i] = i as u64;
+        }
+
+        slice_freq_index.par_sort_unstable_by(|i, j| {
+            let mut cmp = slice_freq[*j as usize].cmp(&slice_freq[*i as usize]);
+            if cmp.is_eq() {
+                cmp = slice_index[*i as usize].cmp(&slice_index[*j as usize]);
+            }
+            return cmp;
+        });
+
+        fa_freq_index.sync()?;
+
+        Ok(())
     }
 
     pub fn construct_index<F>(&self, mut f: F) -> io::Result<()> where F: FnMut(u32) {
@@ -246,17 +284,21 @@ impl<'a> HIBPDB<'a> {
     }
 
     #[inline]
-    pub fn index(&self) -> &[HASH] {
+    pub fn index(&mut self) -> io::Result<&[HASH]> {
+        if self.index.is_none() {
+            let file_index = self.dbdir.join("index.bin");
+            self.index = Some(FileArray::new(file_index.as_path(), 0)?);
+        }
         let fa: &FileArray<HASH> = self.index.as_ref().unwrap();
-        return fa.as_slice();
+        return Ok(fa.as_slice());
     }
 
-    pub fn find(self: &mut Self, key: &HASH) -> Result<usize, usize> {
-        self.index().interpolation_search(key)
+    pub fn find(self: &mut Self, key: &HASH) -> io::Result<Result<usize, usize>> {
+        Ok(self.index()?.interpolation_search(key))
     }
 
-    pub fn len(&self) -> usize {
-        self.index.as_ref().unwrap().len()
+    pub fn len(&mut self) -> io::Result<usize> {
+        Ok(self.index()?.len())
     }
 }
 

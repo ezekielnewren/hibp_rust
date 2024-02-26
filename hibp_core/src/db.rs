@@ -2,7 +2,7 @@ use std::{fs, io};
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, ErrorKind, Read, Write};
 use std::mem::size_of;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use memmap2::{MmapMut, MmapOptions};
 use crate::{compress_xz, convert_range, download_range, extract_gz, extract_xz, HASH, HashRange, InterpolationSearch};
 
@@ -12,7 +12,7 @@ use rayon::prelude::*;
 use crate::transform::{Transform, TransformConcurrent};
 
 pub struct FileArray<'a, T> {
-    pub pathname: String,
+    pub pathname: PathBuf,
     pub fd: File,
     pub mmap: MmapMut,
     pub slice: &'a mut [T],
@@ -20,12 +20,12 @@ pub struct FileArray<'a, T> {
 
 impl<'a, T> FileArray<'a, T> {
 
-    pub fn new(_pathname: String, size: usize) -> std::io::Result<Self> {
+    pub fn new(_pathname: &Path, size: usize) -> std::io::Result<Self> {
         let fd = fs::OpenOptions::new()
             .create(true)
             .write(true)
             .append(true)
-            .open(_pathname.clone())?;
+            .open(_pathname)?;
 
         fd.set_len((size * size_of::<T>()) as u64)?;
 
@@ -37,7 +37,7 @@ impl<'a, T> FileArray<'a, T> {
         };
 
         Ok(Self {
-            pathname: _pathname,
+            pathname: PathBuf::from(_pathname),
             fd,
             mmap: mmap_mut,
             slice,
@@ -61,7 +61,7 @@ impl<'a, T> FileArray<'a, T> {
 
 
 pub struct HIBPDB<'a> {
-    pub dbdir: String,
+    pub dbdir: PathBuf,
     pub index: Option<FileArray<'a, HASH>>,
     pub rt: tokio::runtime::Runtime,
 }
@@ -73,7 +73,7 @@ impl<'a> HIBPDB<'a> {
         file_index.push_str("/index.bin");
 
         Ok(Self {
-            dbdir,
+            dbdir: PathBuf::from(dbdir.as_str()),
             index: None,
             rt: tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
@@ -82,11 +82,11 @@ impl<'a> HIBPDB<'a> {
         })
     }
 
-    pub fn save(prefix: String, hr: HashRange) -> io::Result<()> {
+    pub fn save(prefix: &Path, hr: HashRange) -> io::Result<()> {
         let file_name = HashRange::name(hr.range);
 
-        let path_tmp = prefix.clone()+"tmp."+file_name.as_str();
-        let pathname = prefix+file_name.as_str();
+        let path_tmp = prefix.join(String::from("tmp.")+file_name.as_str());
+        let pathname = prefix.join(file_name);
         {
             let mut fd = File::create(&path_tmp)?;
             let out = hr.serialize();
@@ -97,11 +97,11 @@ impl<'a> HIBPDB<'a> {
         Ok(())
     }
 
-    pub fn load(prefix: String, range: u32) -> io::Result<HashRange> {
+    pub fn load(prefix: &Path, range: u32) -> io::Result<HashRange> {
         let file_name = HashRange::name(range);
 
         let mut buff: Vec<u8> = Vec::new();
-        let mut fd = File::open(prefix+file_name.as_str())?;
+        let mut fd = File::open(prefix.join(file_name))?;
         fd.read_to_end(&mut buff)?;
 
         return HashRange::deserialize(buff.as_slice());
@@ -145,7 +145,7 @@ impl<'a> HIBPDB<'a> {
     }
 
     pub fn update<F>(self: &Self, mut f: F) -> io::Result<()> where F: FnMut(u32)  {
-        let dir_range = self.dbdir.clone()+"/range/";
+        let dir_range = self.dbdir.join("range/");
         fs::create_dir_all(dir_range.clone()).unwrap();
 
         let limit0 = 500;
@@ -153,15 +153,13 @@ impl<'a> HIBPDB<'a> {
         let client = reqwest::Client::new();
 
         let fut = async {
-            let prefix = Path::new(dir_range.as_str());
-
             let mut queue0 = FuturesUnordered::new();
             let mut queue1: Vec<HashRange> = Vec::new();
 
             let mut range = 0;
             loop {
                 if queue0.len() < limit0 && range < (1<<20) {
-                    if !prefix.join(HashRange::name(range)).exists() {
+                    if !dir_range.join(HashRange::name(range)).exists() {
                         queue0.push(download_range(&client, range));
                     }
                     range += 1;
@@ -177,7 +175,7 @@ impl<'a> HIBPDB<'a> {
                 if downloaded || queue1.len() >= limit1 {
                     queue1.par_iter().for_each(|hr| {
                         let compact = Self::compact(&hr).unwrap();
-                        Self::save(dir_range.clone(), compact).unwrap();
+                        Self::save(dir_range.as_path(), compact).unwrap();
                     });
                     for r in &queue1 {
                         f(r.range);
@@ -197,21 +195,23 @@ impl<'a> HIBPDB<'a> {
     }
 
     pub fn construct_index<F>(&self, mut f: F) -> io::Result<()> where F: FnMut(u32) {
+        let dir_range: PathBuf = self.dbdir.join("range/");
+
         let mut file_index = OpenOptions::new()
             .create(true)
             .write(true)
             .truncate(true)
-            .open(self.dbdir.clone()+"/index.bin")?;
+            .open(self.dbdir.join("index.bin"))?;
 
         let mut file_frequency = OpenOptions::new()
             .create(true)
             .write(true)
             .truncate(true)
-            .open(self.dbdir.clone()+"/frequency.bin")?;
+            .open(self.dbdir.join("frequency.bin"))?;
 
-        let prefix: String = self.dbdir.clone()+"/range/";
+        let prefix = dir_range.clone();
         let mut transformer: TransformConcurrent<u32, io::Result<(Vec<u8>, Vec<u8>)>> = TransformConcurrent::new(move |range| {
-            let r = convert_range(Self::load(prefix.clone(), range)?);
+            let r = convert_range(Self::load(prefix.as_path(), range)?);
             return match r {
                 Ok((buff0, freq)) => {
                     let mut buff1: Vec<u8> = Vec::new();

@@ -13,21 +13,25 @@ use crate::transform::{Transform, TransformConcurrent};
 
 pub struct HIBPDB<'a> {
     pub dbdir: PathBuf,
-    pub index: FileArray<'a, HASH>,
-    pub rt: tokio::runtime::Runtime,
+    pub hash_col: FileArray<'a, HASH>,
+    pub frequency_col: FileArray<'a, u64>,
+    pub frequency_idx: FileArray<'a, u64>,
+    pub password_col: FileArray<'a, u64>,
 }
 
 impl<'a> HIBPDB<'a> {
     pub fn open(v: &Path) -> io::Result<Self> {
-        let file_index = v.join("index.bin");
+        let hash_file = v.join("hash.col");
+        let frequency_col_file = v.join("frequency.col");
+        let frequency_idx_file = v.join("frequency.idx");
+        let password_col_file = v.join("password.col");
 
         Ok(Self {
             dbdir: PathBuf::from(v),
-            index: FileArray::open(file_index.as_path())?,
-            rt: tokio::runtime::Builder::new_multi_thread()
-                .enable_all()
-                .build()
-                .unwrap(),
+            hash_col: FileArray::open(hash_file.as_path())?,
+            frequency_col: FileArray::open(frequency_col_file.as_path())?,
+            frequency_idx: FileArray::open(frequency_idx_file.as_path())?,
+            password_col: FileArray::open(password_col_file.as_path())?,
         })
     }
 
@@ -144,7 +148,7 @@ impl<'a> HIBPDB<'a> {
     }
 
     pub fn update_frequency_index(dbdir: &Path) -> io::Result<()> {
-        let file_hash = dbdir.join("index.bin");
+        let file_hash = dbdir.join("hash.col");
         let file_freq = dbdir.join("frequency.col");
         let file_freq_index = dbdir.join("frequency.idx");
 
@@ -181,13 +185,13 @@ impl<'a> HIBPDB<'a> {
             .create(true)
             .write(true)
             .truncate(true)
-            .open(self.dbdir.join("index.bin"))?;
+            .open(self.dbdir.join("hash.col"))?;
 
         let mut file_frequency = OpenOptions::new()
             .create(true)
             .write(true)
             .truncate(true)
-            .open(self.dbdir.join("frequency.bin"))?;
+            .open(self.dbdir.join("frequency.col"))?;
 
         let prefix = dir_range.clone();
         let mut transformer: TransformConcurrent<u32, io::Result<(Vec<u8>, Vec<u8>)>> = TransformConcurrent::new(move |range| {
@@ -226,16 +230,16 @@ impl<'a> HIBPDB<'a> {
     }
 
     #[inline]
-    pub fn index(&self) -> &[HASH] {
-        self.index.as_slice()
+    pub fn hash(&self) -> &[HASH] {
+        self.hash_col.as_slice()
     }
 
     pub fn find(self: &mut Self, key: &HASH) -> Result<usize, usize> {
-        self.index().interpolation_search(key)
+        self.hash().interpolation_search(key)
     }
 
     pub fn len(&self) -> usize {
-        self.index().len()
+        self.hash().len()
     }
 }
 

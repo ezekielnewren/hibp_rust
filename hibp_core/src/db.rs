@@ -1,76 +1,19 @@
 use std::{fs, io};
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, ErrorKind, Read, Write};
-use std::mem::size_of;
 use std::path::{Path, PathBuf};
-use memmap2::{MmapMut, MmapOptions};
 use crate::{compress_xz, convert_range, download_range, extract_gz, extract_xz, HASH, HashRange, InterpolationSearch};
 
 use futures::stream::{FuturesUnordered};
 use futures::StreamExt;
 use tokio::runtime::Runtime;
 use rayon::prelude::*;
+use crate::file_array::{FileArray, FileArrayMut};
 use crate::transform::{Transform, TransformConcurrent};
-
-pub struct FileArrayMut<'a, T> {
-    pub pathname: PathBuf,
-    pub fd: File,
-    pub mmap: MmapMut,
-    pub slice: &'a mut [T],
-}
-
-impl<'a, T> FileArrayMut<'a, T> {
-
-    pub fn new(_pathname: &Path, size: usize) -> std::io::Result<Self> {
-        let fd = fs::OpenOptions::new()
-            .create(true)
-            .read(true)
-            .write(true)
-            .truncate(false)
-            .open(_pathname)?;
-
-        if size != 0 {
-            fd.set_len((size * size_of::<T>()) as u64)?;
-        }
-
-        let mut mmap_mut = unsafe { MmapOptions::new().map_mut(&fd)? };
-
-        let slice = unsafe {
-            let ptr = mmap_mut.as_mut_ptr() as *mut T;
-            std::slice::from_raw_parts_mut(ptr, mmap_mut.len()/size_of::<T>())
-        };
-
-        Ok(Self {
-            pathname: PathBuf::from(_pathname),
-            fd,
-            mmap: mmap_mut,
-            slice,
-        })
-    }
-
-    pub fn sync(&mut self) -> io::Result<()> {
-        self.mmap.flush()
-    }
-
-    pub fn as_mut_slice(&mut self) -> &mut [T] {
-        return self.slice;
-    }
-
-    pub fn as_slice(&self) -> &[T] {
-        return self.slice;
-    }
-
-    pub fn len(&self) -> usize {
-        return self.mmap.len();
-    }
-
-}
-
-
 
 pub struct HIBPDB<'a> {
     pub dbdir: PathBuf,
-    pub index: FileArrayMut<'a, HASH>,
+    pub index: FileArray<'a, HASH>,
     pub rt: tokio::runtime::Runtime,
 }
 
@@ -80,7 +23,7 @@ impl<'a> HIBPDB<'a> {
 
         Ok(Self {
             dbdir: PathBuf::from(v),
-            index: FileArrayMut::new(file_index.as_path(), 0)?,
+            index: FileArray::open(file_index.as_path())?,
             rt: tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .build()
@@ -200,33 +143,33 @@ impl<'a> HIBPDB<'a> {
         rt.block_on(fut)
     }
 
-    pub fn sort_freq(&mut self) -> io::Result<()> {
-        let file_freq = self.dbdir.join("frequency.bin");
-        let file_freq_index = self.dbdir.join("freq_index.bin");
+    pub fn sort_freq(dbdir: &Path) -> io::Result<()> {
+        let file_hash = dbdir.join("index.bin");
+        let file_freq = dbdir.join("frequency.col");
+        let file_freq_index = dbdir.join("frequency.idx");
 
-        let db_len = self.len();
+        let hash_fa = FileArray::<HASH>::open(file_hash.as_path())?;
+        let hash_slice = hash_fa.as_slice();
 
-        let slice_index = self.index();
+        let frequency_col_fa = FileArray::<u64>::open(file_freq.as_path())?;
+        let frequency_col_slice = frequency_col_fa.as_slice();
 
-        let fa_freq: FileArrayMut<u64> = FileArrayMut::new(file_freq.as_path(), 0)?;
-        let slice_freq = fa_freq.as_slice();
+        let mut frequency_idx_fa: FileArrayMut<u64> = FileArrayMut::open(file_freq_index.as_path(), hash_slice.len())?;
+        let frequency_idx_slice = frequency_idx_fa.as_mut_slice();
 
-        let mut fa_freq_index: FileArrayMut<u64> = FileArrayMut::new(file_freq_index.as_path(), db_len)?;
-
-        let slice_freq_index = fa_freq_index.as_mut_slice();
-        for i in 0..slice_freq_index.len() {
-            slice_freq_index[i] = i as u64;
+        for i in 0..frequency_idx_slice.len() {
+            frequency_idx_slice[i] = i as u64;
         }
 
-        slice_freq_index.par_sort_unstable_by(|i, j| {
-            let mut cmp = slice_freq[*j as usize].cmp(&slice_freq[*i as usize]);
+        frequency_idx_slice.par_sort_unstable_by(|i, j| {
+            let mut cmp = frequency_col_slice[*j as usize].cmp(&frequency_col_slice[*i as usize]);
             if cmp.is_eq() {
-                cmp = slice_index[*i as usize].cmp(&slice_index[*j as usize]);
+                cmp = hash_slice[*i as usize].cmp(&hash_slice[*j as usize]);
             }
             return cmp;
         });
 
-        fa_freq_index.sync()?;
+        frequency_idx_fa.sync()?;
 
         Ok(())
     }

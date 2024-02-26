@@ -102,13 +102,6 @@ fn construct(args: Args) {
     db.construct_index(status).unwrap();
 }
 
-fn test(args: Args) {
-    let dbdir = PathBuf::from(args.dbdirectory);
-    let mut db = HIBPDB::open(dbdir.as_path()).unwrap();
-
-    db.sort_freq().unwrap();
-}
-
 fn main() {
     let args = Args::parse();
 
@@ -118,8 +111,6 @@ fn main() {
         update(args);
     } else if args.construct {
         construct(args);
-    } else if args.test {
-        test(args);
     }
 }
 

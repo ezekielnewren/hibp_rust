@@ -203,13 +203,20 @@ impl<'a> HIBPDB<'a> {
             .truncate(true)
             .open(self.dbdir.clone()+"/index.bin")?;
 
+        let mut file_frequency = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(self.dbdir.clone()+"/frequency.bin")?;
 
         let prefix: String = self.dbdir.clone()+"/range/";
-        let mut transformer: TransformConcurrent<u32, io::Result<Vec<u8>>> = TransformConcurrent::new(move |range| {
+        let mut transformer: TransformConcurrent<u32, io::Result<(Vec<u8>, Vec<u64>)>> = TransformConcurrent::new(move |range| {
             return convert_range(Self::load(prefix.clone(), range)?);
         }, 0);
 
         let limit = 1000;
+
+        let mut max_freq = 0u64;
 
         let mut wp = 0u32;
         let mut rp = 0u32;
@@ -218,8 +225,17 @@ impl<'a> HIBPDB<'a> {
                 transformer.add(wp);
                 wp += 1;
             } else {
-                let buff = transformer.take()?;
+                let (mut buff, freq) = transformer.take()?;
                 file_index.write_all(buff.as_slice()).unwrap();
+                buff.clear();
+                for i in freq {
+                    if i > max_freq {
+                        max_freq = i;
+                    }
+                    let x = i.to_le_bytes();
+                    buff.extend_from_slice(&x);
+                }
+                file_frequency.write_all(buff.as_slice()).unwrap();
                 f(rp);
                 rp += 1;
             }

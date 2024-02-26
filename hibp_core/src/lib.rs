@@ -286,7 +286,7 @@ pub async fn download_range(client: &reqwest::Client, range: u32) -> Result<Hash
     })
 }
 
-pub fn convert_range(hr: HashRange) -> io::Result<Vec<u8>> {
+pub fn convert_range(hr: HashRange) -> io::Result<(Vec<u8>, Vec<u64>)> {
     let plain = match hr.format.as_str() {
         "xz" => extract_xz(hr.buff.as_slice()),
         "gz" => extract_gz(hr.buff.as_slice()),
@@ -294,6 +294,8 @@ pub fn convert_range(hr: HashRange) -> io::Result<Vec<u8>> {
     }?;
 
     let mut buff: Vec<u8> = Vec::new();
+    let mut freq: Vec<u64> = Vec::new();
+
     let mut hash = vec![0u8; 16];
     for v in plain.lines() {
         let line = v?;
@@ -302,9 +304,14 @@ pub fn convert_range(hr: HashRange) -> io::Result<Vec<u8>> {
             Ok(_) => buff.extend(&hash),
             Err(e) => return Err(io::Error::new(ErrorKind::InvalidInput, e.to_string())),
         }
+        let t = u64::from_str_radix(&line[33-5..], 16);
+        match t {
+            Ok(v) => freq.push(v),
+            Err(e) => return Err(io::Error::new(ErrorKind::InvalidInput, e.to_string())),
+        }
     }
 
-    Ok(buff)
+    Ok((buff, freq))
 }
 
 pub fn dir_list(path: &str) -> std::io::Result<Vec<String>> {

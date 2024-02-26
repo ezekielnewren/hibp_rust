@@ -12,14 +12,14 @@ use tokio::runtime::Runtime;
 use rayon::prelude::*;
 use crate::transform::{Transform, TransformConcurrent};
 
-pub struct FileArray<'a, T> {
+pub struct FileArrayMut<'a, T> {
     pub pathname: PathBuf,
     pub fd: File,
     pub mmap: MmapMut,
     pub slice: &'a mut [T],
 }
 
-impl<'a, T> FileArray<'a, T> {
+impl<'a, T> FileArrayMut<'a, T> {
 
     pub fn new(_pathname: &Path, size: usize) -> std::io::Result<Self> {
         let fd = fs::OpenOptions::new()
@@ -70,7 +70,7 @@ impl<'a, T> FileArray<'a, T> {
 
 pub struct HIBPDB<'a> {
     pub dbdir: PathBuf,
-    pub index: FileArray<'a, HASH>,
+    pub index: FileArrayMut<'a, HASH>,
     pub rt: tokio::runtime::Runtime,
 }
 
@@ -80,7 +80,7 @@ impl<'a> HIBPDB<'a> {
 
         Ok(Self {
             dbdir: PathBuf::from(v),
-            index: FileArray::new(file_index.as_path(), 0)?,
+            index: FileArrayMut::new(file_index.as_path(), 0)?,
             rt: tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .build()
@@ -208,10 +208,10 @@ impl<'a> HIBPDB<'a> {
 
         let slice_index = self.index();
 
-        let fa_freq: FileArray<u64> = FileArray::new(file_freq.as_path(), 0)?;
+        let fa_freq: FileArrayMut<u64> = FileArrayMut::new(file_freq.as_path(), 0)?;
         let slice_freq = fa_freq.as_slice();
 
-        let mut fa_freq_index: FileArray<u64> = FileArray::new(file_freq_index.as_path(), db_len)?;
+        let mut fa_freq_index: FileArrayMut<u64> = FileArrayMut::new(file_freq_index.as_path(), db_len)?;
 
         let slice_freq_index = fa_freq_index.as_mut_slice();
         for i in 0..slice_freq_index.len() {

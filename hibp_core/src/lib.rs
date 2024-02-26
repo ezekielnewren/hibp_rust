@@ -6,8 +6,11 @@ pub mod indexbycopy;
 use std::fmt::{Debug, Formatter};
 use std::mem::{size_of};
 use std::{io, slice};
+use std::cell::RefCell;
 use std::io::{BufRead, ErrorKind, Read, Write};
+use std::ops::Deref;
 use std::str::Utf8Error;
+use std::sync::Arc;
 use chrono::DateTime;
 use flate2::Compression;
 use flate2::write::GzEncoder;
@@ -17,6 +20,10 @@ use md4::{Digest, Md4};
 use rand::{RngCore, SeedableRng};
 use xz2::write::XzEncoder;
 use serde::{Serialize, Deserialize};
+
+use futures::stream::{FuturesUnordered};
+use futures::StreamExt;
+use tokio::runtime::Runtime;
 
 pub type HASH = [u8; 16];
 
@@ -32,6 +39,15 @@ pub fn HASH_to_hex(v: &HASH) -> String {
     hex::encode_upper(v)
 }
 
+
+static rt: once_cell::sync::Lazy<Arc<Runtime>> = once_cell::sync::Lazy::new(|| Arc::new(tokio::runtime::Builder::new_multi_thread()
+    .enable_all()
+    .build()
+    .unwrap()));
+
+pub fn get_runtime() -> &'static Runtime {
+     rt.deref()
+}
 
 pub struct DownloadError {
     range: u32,

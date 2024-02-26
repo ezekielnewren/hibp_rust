@@ -587,6 +587,7 @@ dependencies = [
  "hibp_core",
  "num_cpus",
  "rand",
+ "tokio",
 ]
 
 [[package]]
@@ -615,6 +616,7 @@ dependencies = [
  "md4",
  "memmap2",
  "num_cpus",
+ "once_cell",
  "rand",
  "rayon",
  "regex",

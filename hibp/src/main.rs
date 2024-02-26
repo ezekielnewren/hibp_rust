@@ -1,5 +1,6 @@
 use std::io;
 use std::io::{BufReader, prelude::*};
+use std::path::PathBuf;
 use std::time::Instant;
 
 use clap::Parser;
@@ -26,7 +27,8 @@ struct Args {
 }
 
 fn ingest(args: Args) {
-    let mut db = HIBPDB::new(args.dbdirectory).unwrap();
+    let dbdir = PathBuf::from(args.dbdirectory);
+    let mut db = HIBPDB::new(dbdir.as_path()).unwrap();
 
     let mut stdin = BufReader::new(io::stdin());
     let mut buff: Vec<u8> = Vec::new();
@@ -79,18 +81,22 @@ fn ingest(args: Args) {
     println!("rate: {}", rate)
 }
 
+use tokio::runtime::Runtime;
+
 fn update(args: Args) {
-    let mut db = HIBPDB::new(args.dbdirectory).unwrap();
+    let dbdir = PathBuf::from(args.dbdirectory);
+    let mut db = HIBPDB::new(dbdir.as_path()).unwrap();
 
     let status: fn(u32) = |range| {
         println!("{:05X}", range);
     };
 
-    db.update(status).unwrap();
+    HIBPDB::update(get_runtime(), dbdir.as_path(), status).unwrap();
 }
 
 fn construct(args: Args) {
-    let db = HIBPDB::new(args.dbdirectory).unwrap();
+    let dbdir = PathBuf::from(args.dbdirectory);
+    let mut db = HIBPDB::new(dbdir.as_path()).unwrap();
 
     let status: fn(u32) = |range| {
         println!("{:05X}", range);
@@ -100,7 +106,8 @@ fn construct(args: Args) {
 }
 
 fn test(args: Args) {
-    let mut db = HIBPDB::new(args.dbdirectory).unwrap();
+    let dbdir = PathBuf::from(args.dbdirectory);
+    let mut db = HIBPDB::new(dbdir.as_path()).unwrap();
 
     let status: fn(u32) = |range| {
         println!("{:05X}", range);

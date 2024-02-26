@@ -8,6 +8,7 @@ use crate::{compress_xz, convert_range, download_range, extract_gz, extract_xz, 
 
 use futures::stream::{FuturesUnordered};
 use futures::StreamExt;
+use tokio::runtime::Runtime;
 use rayon::prelude::*;
 use crate::transform::{Transform, TransformConcurrent};
 
@@ -74,13 +75,9 @@ pub struct HIBPDB<'a> {
 }
 
 impl<'a> HIBPDB<'a> {
-    pub fn new(v: String) -> io::Result<Self> {
-        let dbdir = v.clone();
-        let mut file_index = dbdir.clone();
-        file_index.push_str("/index.bin");
-
+    pub fn new(v: &Path) -> io::Result<Self> {
         Ok(Self {
-            dbdir: PathBuf::from(dbdir.as_str()),
+            dbdir: PathBuf::from(v),
             index: None,
             rt: tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
@@ -151,8 +148,8 @@ impl<'a> HIBPDB<'a> {
         Ok(copy)
     }
 
-    pub fn update<F>(&mut self, mut f: F) -> io::Result<()> where F: FnMut(u32)  {
-        let dir_range = self.dbdir.join("range/");
+    pub fn update<F>(rt: &Runtime, dbdir: &Path, mut f: F) -> io::Result<()> where F: FnMut(u32)  {
+        let dir_range = dbdir.join("range/");
         fs::create_dir_all(dir_range.clone()).unwrap();
 
         let limit0 = 500;
@@ -198,7 +195,7 @@ impl<'a> HIBPDB<'a> {
             Ok::<(), io::Error>(())
         };
 
-        self.rt.block_on(fut)
+        rt.block_on(fut)
     }
 
     pub fn sort_freq(&mut self) -> io::Result<()> {

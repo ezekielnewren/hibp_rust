@@ -10,17 +10,11 @@ fn get_dbdir() -> PathBuf {
 
 
 #[test]
-pub fn test_update() {
+pub fn test_update_download_missing() {
 
     let dbdir = get_dbdir();
-    let db = HIBPDB::new(dbdir.as_path());
 
-    let status = |v| {};
-
-    let rt = get_runtime();
-
-    HIBPDB::update(rt, dbdir.as_path(), status).unwrap();
-
+    HIBPDB::update_download_missing(get_runtime(), dbdir.as_path(), |v| {}).unwrap();
 }
 
 

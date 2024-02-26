@@ -148,7 +148,7 @@ impl<'a> HIBPDB<'a> {
         Ok(copy)
     }
 
-    pub fn update<F>(rt: &Runtime, dbdir: &Path, mut f: F) -> io::Result<()> where F: FnMut(u32)  {
+    pub fn update_download_missing<F>(rt: &Runtime, dbdir: &Path, mut f: F) -> io::Result<()> where F: FnMut(u32)  {
         let dir_range = dbdir.join("range/");
         fs::create_dir_all(dir_range.clone()).unwrap();
 

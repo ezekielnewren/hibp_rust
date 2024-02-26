@@ -81,22 +81,19 @@ fn ingest(args: Args) {
     println!("rate: {}", rate)
 }
 
-use tokio::runtime::Runtime;
-
 fn update(args: Args) {
     let dbdir = PathBuf::from(args.dbdirectory);
-    let mut db = HIBPDB::new(dbdir.as_path()).unwrap();
 
     let status: fn(u32) = |range| {
         println!("{:05X}", range);
     };
 
-    HIBPDB::update(get_runtime(), dbdir.as_path(), status).unwrap();
+    HIBPDB::update_download_missing(get_runtime(), dbdir.as_path(), status).unwrap();
 }
 
 fn construct(args: Args) {
     let dbdir = PathBuf::from(args.dbdirectory);
-    let mut db = HIBPDB::new(dbdir.as_path()).unwrap();
+    let db = HIBPDB::new(dbdir.as_path()).unwrap();
 
     let status: fn(u32) = |range| {
         println!("{:05X}", range);
@@ -108,10 +105,6 @@ fn construct(args: Args) {
 fn test(args: Args) {
     let dbdir = PathBuf::from(args.dbdirectory);
     let mut db = HIBPDB::new(dbdir.as_path()).unwrap();
-
-    let status: fn(u32) = |range| {
-        println!("{:05X}", range);
-    };
 
     db.sort_freq().unwrap();
 }

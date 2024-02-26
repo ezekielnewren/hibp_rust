@@ -143,7 +143,7 @@ impl<'a> HIBPDB<'a> {
         rt.block_on(fut)
     }
 
-    pub fn sort_freq(dbdir: &Path) -> io::Result<()> {
+    pub fn update_frequency_index(dbdir: &Path) -> io::Result<()> {
         let file_hash = dbdir.join("index.bin");
         let file_freq = dbdir.join("frequency.col");
         let file_freq_index = dbdir.join("frequency.idx");

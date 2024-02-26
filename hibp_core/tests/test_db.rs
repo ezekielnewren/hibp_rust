@@ -15,9 +15,7 @@ pub fn test_update_download_missing() {
 }
 
 #[test]
-pub fn test_construct() {
-
-
-
+pub fn test_update_frequency_index() {
+    HIBPDB::update_frequency_index(get_dbdir().as_path()).unwrap();
 }
 

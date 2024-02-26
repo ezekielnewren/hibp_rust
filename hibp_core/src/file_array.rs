@@ -53,7 +53,7 @@ impl<'a, T> FileArrayMut<'a, T> {
     }
 
     pub fn len(&self) -> usize {
-        return self.mmap.len();
+        return self.mmap.len()/size_of::<T>();
     }
 
 }
@@ -92,7 +92,7 @@ impl<'a, T> FileArray<'a, T> {
     }
 
     pub fn len(&self) -> usize {
-        return self.mmap.len();
+        return self.mmap.len()/size_of::<T>();
     }
 
 }

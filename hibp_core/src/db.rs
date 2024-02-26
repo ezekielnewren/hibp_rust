@@ -178,20 +178,20 @@ impl<'a> HIBPDB<'a> {
         Ok(())
     }
 
-    pub fn construct_index<F>(&self, mut f: F) -> io::Result<()> where F: FnMut(u32) {
-        let dir_range: PathBuf = self.dbdir.join("range/");
+    pub fn update_construct_columns<F>(dbdir: &Path, mut f: F) -> io::Result<()> where F: FnMut(u32) {
+        let dir_range: PathBuf = dbdir.join("range/");
 
-        let mut file_index = OpenOptions::new()
+        let mut file_hash = OpenOptions::new()
             .create(true)
             .write(true)
             .truncate(true)
-            .open(self.dbdir.join("hash.col"))?;
+            .open(dbdir.join("hash.col"))?;
 
         let mut file_frequency = OpenOptions::new()
             .create(true)
             .write(true)
             .truncate(true)
-            .open(self.dbdir.join("frequency.col"))?;
+            .open(dbdir.join("frequency.col"))?;
 
         let prefix = dir_range.clone();
         let mut transformer: TransformConcurrent<u32, io::Result<(Vec<u8>, Vec<u8>)>> = TransformConcurrent::new(move |range| {
@@ -219,12 +219,22 @@ impl<'a> HIBPDB<'a> {
                 wp += 1;
             } else {
                 let (buff, freq) = transformer.take()?;
-                file_index.write_all(buff.as_slice()).unwrap();
+                file_hash.write_all(buff.as_slice()).unwrap();
                 file_frequency.write_all(freq.as_slice()).unwrap();
                 f(rp);
                 rp += 1;
             }
         }
+
+        let file_password = dbdir.join("password.col");
+        let mut password_fa = FileArrayMut::<u64>::open(file_password.as_path(), file_hash.metadata()?.len() as usize)?;
+        let mut password_slice = password_fa.as_slice();
+
+
+        for i in 0..password_slice.len() {
+            password_fa.as_mut_slice()[i] = u64::MAX;
+        }
+        password_fa.sync()?;
 
         Ok(())
     }

@@ -15,6 +15,11 @@ pub fn test_update_download_missing() {
 }
 
 #[test]
+pub fn test_update_construct_columns() {
+    HIBPDB::update_construct_columns(get_dbdir().as_path(), |_|{}).unwrap();
+}
+
+#[test]
 pub fn test_update_frequency_index() {
     HIBPDB::update_frequency_index(get_dbdir().as_path()).unwrap();
 }

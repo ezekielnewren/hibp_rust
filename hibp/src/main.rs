@@ -99,7 +99,7 @@ fn construct(args: Args) {
         println!("{:05X}", range);
     };
 
-    db.construct_index(status).unwrap();
+    db.update_construct_columns(status).unwrap();
 }
 
 fn main() {

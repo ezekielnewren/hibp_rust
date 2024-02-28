@@ -9,6 +9,7 @@ use rand::{Rng, RngCore, SeedableRng};
 use thousands::Separable;
 use clap::Parser;
 use hibp_core::db::HIBPDB;
+use rayon::prelude::*;
 
 pub fn timeit<F>(min_runtime: Duration, mut inner: F) -> u64
     where F: FnMut(),
@@ -108,16 +109,18 @@ impl Benchmarker {
 const BUFFER_SIZE: usize = 1000;
 
 
-pub fn linear_regression<T>(slice: &[T], c: fn(&T) -> f64) -> (f64, f64) {
+pub fn linear_regression<T>(slice: &[T], c: fn(&T) -> f64) -> (f64, f64)
+    where T: Send + Sync
+{
     let n = slice.len() as f64;
 
-    let y_sum: f64 = slice.iter().map(c).sum();
+    let y_sum: f64 = slice.par_iter().map(c).sum();
     let y_mean: f64 = y_sum/n;
 
     let sum_xx = n*(n-1.0)*(2.0*n-1.0)/6.0;
     let x_mean = (n-1f64)/2f64;
 
-    let numerator: f64 = (0..slice.len()).into_iter().map(|i| {
+    let numerator: f64 = (0..slice.len()).into_par_iter().map(|i| {
         let x = i as f64;
         let y = c(&slice[i]);
         (x - x_mean) * (y - y_mean)

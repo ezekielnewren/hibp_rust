@@ -598,6 +598,7 @@ dependencies = [
  "hibp_core",
  "md4",
  "rand",
+ "rayon",
  "thousands",
 ]
 

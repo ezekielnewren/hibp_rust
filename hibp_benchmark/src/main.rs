@@ -160,24 +160,55 @@ pub fn r_squared<T, F>(slice: &[T], c: fn(&T) -> f64, f: &F) -> f64
 }
 
 
-fn sandbox(args: &Args) {
+fn linear_regression_fitness(args: &Args) {
     let dbdir = PathBuf::from(args.dbdirectory.clone());
     let db = HIBPDB::open(dbdir.as_path()).unwrap();
 
     let hash_col = db.hash_col.as_slice();
     let c: fn(&HASH) -> f64 = |&hash| u128::from_be_bytes(hash) as f64;
 
-    let m0 = (u128::MAX/hash_col.len() as u128) as f64;
-    let f0 = |x| return m0*x + 0.0;
+    let m0 = (u128::MAX / hash_col.len() as u128) as f64;
+    let f0 = |x| return m0 * x + 0.0;
     let fitness0 = r_squared(hash_col, c, &f0);
     println!("u128::MAX/len: {}", fitness0);
 
     let (m1, b) = linear_regression(hash_col, c);
     println!("y = {}*x + {}", m0 as u128, b as u128);
 
-    let f1 = |x| return m1*x + b;
+    let f1 = |x| return m1 * x + b;
     let fitness1 = r_squared(hash_col, c, &f1);
     println!("linear_regression: {}", fitness1);
+}
+
+fn sandbox(args: &Args) {
+
+    let dbdir = PathBuf::from(args.dbdirectory.clone());
+    let db = HIBPDB::open(dbdir.as_path()).unwrap();
+
+    let hash_col = db.hash_col.as_slice();
+    let c: fn(&HASH) -> f64 = |&hash| u128::from_be_bytes(hash) as f64;
+
+    let (m, b) = linear_regression(hash_col, c);
+    let f = |y| (y-b)/m;
+
+    let mut max_var = 0;
+    let mut avg_var = 0;
+
+
+    (0..hash_col.len()).into_iter().for_each(|i| {
+        let x = i as f64;
+        let x_hat = f(c(&hash_col[i]));
+        let diff = (x-x_hat).abs() as usize;
+        if diff > max_var {
+            max_var = diff;
+        }
+        avg_var += diff;
+    });
+
+    avg_var /= hash_col.len();
+
+    println!("max_var: {}", max_var);
+    println!("avg_var: {}", avg_var);
 }
 
 fn main() {

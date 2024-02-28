@@ -108,17 +108,20 @@ impl Benchmarker {
 
 const BUFFER_SIZE: usize = 1000;
 
+pub fn mean<T>(slice: &[T], c: fn(&T) -> f64) -> f64
+    where T: Send + Sync
+{
+    slice.par_iter().map(c).sum::<f64>()/slice.len() as f64
+}
+
 
 pub fn linear_regression<T>(slice: &[T], c: fn(&T) -> f64) -> (f64, f64)
     where T: Send + Sync
 {
     let n = slice.len() as f64;
 
-    let y_sum: f64 = slice.par_iter().map(c).sum();
-    let y_mean: f64 = y_sum/n;
-
-    let sum_xx = n*(n-1.0)*(2.0*n-1.0)/6.0;
-    let x_mean = (n-1f64)/2f64;
+    let y_mean: f64 = mean(slice, c);
+    let x_mean = (n-1.0)/2.0;
 
     let numerator: f64 = (0..slice.len()).into_par_iter().map(|i| {
         let x = i as f64;
@@ -126,7 +129,7 @@ pub fn linear_regression<T>(slice: &[T], c: fn(&T) -> f64) -> (f64, f64)
         (x - x_mean) * (y - y_mean)
     }).sum();
 
-    let denominator = sum_xx - (n * x_mean * x_mean);
+    let denominator = n*(n-1.0)*(2.0*n-1.0)/6.0 - x_mean*n*(n-1.0) + n*x_mean*x_mean;
     let m = numerator / denominator;
 
     let b = y_mean - (m * x_mean);

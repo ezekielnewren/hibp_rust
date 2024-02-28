@@ -136,15 +136,46 @@ pub fn linear_regression<T>(slice: &[T], c: fn(&T) -> f64) -> (f64, f64)
     return (m, b);
 }
 
+pub fn r_squared<T, F>(slice: &[T], c: fn(&T) -> f64, f: &F) -> f64
+    where
+        T: Send + Sync,
+        F: Fn(f64) -> f64 + Send + Sync,
+{
+    let y_mean = mean(slice, c);
+
+    let sst: f64 = (0..slice.len()).into_par_iter().map(|x| {
+        let y = c(&slice[x]);
+        let t = y-y_mean;
+        t*t
+    }).sum();
+
+    let ssr: f64 = (0..slice.len()).into_par_iter().map(|x| {
+        let y = c(&slice[x]);
+        let y_hat = f(x as f64);
+        let t = y - y_hat;
+        t*t
+    }).sum();
+
+    return 1.0 - ssr / sst;
+}
+
+
 fn sandbox(args: &Args) {
     let dbdir = PathBuf::from(args.dbdirectory.clone());
     let db = HIBPDB::open(dbdir.as_path()).unwrap();
 
     let hash_col = db.hash_col.as_slice();
 
-    let (m, b) = linear_regression(hash_col, |&hash| u128::from_be_bytes(hash) as f64);
+    let c: fn(&HASH) -> f64 = |&hash| u128::from_be_bytes(hash) as f64;
 
+    let (m, b) = linear_regression(hash_col, c);
     println!("y = {}*x + {}", m as u128, b as u128);
+
+    let f = |x| return m*x + b;
+
+    let fitness = r_squared(hash_col, c, &f);
+
+    println!("fitness: {}", fitness);
 }
 
 fn main() {

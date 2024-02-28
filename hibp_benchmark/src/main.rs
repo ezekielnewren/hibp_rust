@@ -165,17 +165,19 @@ fn sandbox(args: &Args) {
     let db = HIBPDB::open(dbdir.as_path()).unwrap();
 
     let hash_col = db.hash_col.as_slice();
-
     let c: fn(&HASH) -> f64 = |&hash| u128::from_be_bytes(hash) as f64;
 
-    let (m, b) = linear_regression(hash_col, c);
-    println!("y = {}*x + {}", m as u128, b as u128);
+    let m0 = (u128::MAX/hash_col.len() as u128) as f64;
+    let f0 = |x| return m0*x + 0.0;
+    let fitness0 = r_squared(hash_col, c, &f0);
+    println!("u128::MAX/len: {}", fitness0);
 
-    let f = |x| return m*x + b;
+    let (m1, b) = linear_regression(hash_col, c);
+    println!("y = {}*x + {}", m0 as u128, b as u128);
 
-    let fitness = r_squared(hash_col, c, &f);
-
-    println!("fitness: {}", fitness);
+    let f1 = |x| return m1*x + b;
+    let fitness1 = r_squared(hash_col, c, &f1);
+    println!("linear_regression: {}", fitness1);
 }
 
 fn main() {

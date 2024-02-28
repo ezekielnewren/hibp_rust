@@ -99,7 +99,7 @@ fn construct(args: Args) {
         println!("{:05X}", range);
     };
 
-    db.update_construct_columns(status).unwrap();
+    HIBPDB::update_construct_columns(dbdir.as_path(), status).unwrap();
 }
 
 fn main() {

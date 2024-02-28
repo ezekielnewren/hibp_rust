@@ -1,5 +1,6 @@
 use std::{fs, io};
 use std::fs::{File, OpenOptions};
+use std::mem::size_of;
 use std::io::{BufRead, ErrorKind, Read, Write};
 use std::path::{Path, PathBuf};
 use crate::{compress_xz, convert_range, download_range, extract_gz, extract_xz, HASH, HashRange, InterpolationSearch};
@@ -226,13 +227,14 @@ impl<'a> HIBPDB<'a> {
             }
         }
 
-        let file_password = dbdir.join("password.col");
-        let mut password_fa = FileArrayMut::<u64>::open(file_password.as_path(), file_hash.metadata()?.len() as usize)?;
-        let mut password_slice = password_fa.as_slice();
+        let db_len = file_hash.metadata()?.len() as usize/size_of::<HASH>();
 
+        let file_password = dbdir.join("password.col");
+        let mut password_fa = FileArrayMut::<u64>::open(file_password.as_path(), db_len)?;
+        let password_slice = password_fa.as_mut_slice();
 
         for i in 0..password_slice.len() {
-            password_fa.as_mut_slice()[i] = u64::MAX;
+            password_slice[i] = u64::MAX;
         }
         password_fa.sync()?;
 

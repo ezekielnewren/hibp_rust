@@ -77,7 +77,7 @@ fn ingest(args: Args) {
             Err(_) => miss += 1,
         }
 
-        if db.journal.entry.len() >= 1000 {
+        if db.journal.entry.len() >= 100000 {
             db.commit().unwrap();
         }
 

@@ -157,37 +157,6 @@ impl<'a> HIBPDB<'a> {
         rt.block_on(fut)
     }
 
-    pub fn update_frequency_index(dbdir: &Path) -> io::Result<()> {
-        let file_hash = dbdir.join("hash.col");
-        let file_freq = dbdir.join("frequency.col");
-        let file_freq_index = dbdir.join("frequency.idx");
-
-        let hash_fa = FileArray::<HASH>::open(file_hash.as_path())?;
-        let hash_slice = hash_fa.as_slice();
-
-        let frequency_col_fa = FileArray::<u64>::open(file_freq.as_path())?;
-        let frequency_col_slice = frequency_col_fa.as_slice();
-
-        let mut frequency_idx_fa: FileArrayMut<u64> = FileArrayMut::open(file_freq_index.as_path(), hash_slice.len())?;
-        let frequency_idx_slice = frequency_idx_fa.as_mut_slice();
-
-        for i in 0..frequency_idx_slice.len() {
-            frequency_idx_slice[i] = i as u64;
-        }
-
-        frequency_idx_slice.par_sort_unstable_by(|i, j| {
-            let mut cmp = frequency_col_slice[*j as usize].cmp(&frequency_col_slice[*i as usize]);
-            if cmp.is_eq() {
-                cmp = hash_slice[*i as usize].cmp(&hash_slice[*j as usize]);
-            }
-            return cmp;
-        });
-
-        frequency_idx_fa.sync()?;
-
-        Ok(())
-    }
-
     pub fn update_construct_columns<F>(dbdir: &Path, mut f: F) -> io::Result<()> where F: FnMut(u32) {
         let dir_range: PathBuf = dbdir.join("range/");
 
@@ -247,7 +216,10 @@ impl<'a> HIBPDB<'a> {
         }
         password_fa.sync()?;
 
+        Ok(())
+    }
 
+    pub fn update_hash_offset(dbdir: &Path) -> io::Result<()> {
         let file_hash = dbdir.join("hash.col");
         let hash_col = FileArray::<HASH>::open(file_hash.as_path())?;
         let hash_slice = hash_col.as_slice();
@@ -260,6 +232,37 @@ impl<'a> HIBPDB<'a> {
 
         compute_offset(hash_slice, hash_offset, bit_len);
         hash_offset_fa.sync()?;
+
+        Ok(())
+    }
+
+    pub fn update_frequency_index(dbdir: &Path) -> io::Result<()> {
+        let file_hash = dbdir.join("hash.col");
+        let file_freq = dbdir.join("frequency.col");
+        let file_freq_index = dbdir.join("frequency.idx");
+
+        let hash_fa = FileArray::<HASH>::open(file_hash.as_path())?;
+        let hash_slice = hash_fa.as_slice();
+
+        let frequency_col_fa = FileArray::<u64>::open(file_freq.as_path())?;
+        let frequency_col_slice = frequency_col_fa.as_slice();
+
+        let mut frequency_idx_fa: FileArrayMut<u64> = FileArrayMut::open(file_freq_index.as_path(), hash_slice.len())?;
+        let frequency_idx_slice = frequency_idx_fa.as_mut_slice();
+
+        for i in 0..frequency_idx_slice.len() {
+            frequency_idx_slice[i] = i as u64;
+        }
+
+        frequency_idx_slice.par_sort_unstable_by(|i, j| {
+            let mut cmp = frequency_col_slice[*j as usize].cmp(&frequency_col_slice[*i as usize]);
+            if cmp.is_eq() {
+                cmp = hash_slice[*i as usize].cmp(&hash_slice[*j as usize]);
+            }
+            return cmp;
+        });
+
+        frequency_idx_fa.sync()?;
 
         Ok(())
     }

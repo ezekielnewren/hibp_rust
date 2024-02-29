@@ -215,12 +215,17 @@ fn max_avg_variance(args: &Args) {
 
 fn sandbox(args: &Args) {
     let dbdir = PathBuf::from(args.dbdirectory.clone());
-    let db = HIBPDB::open(dbdir.as_path()).unwrap();
 
-    let hash_col = db.hash_col.as_slice();
-    let bit_len = max_bit_prefix(hash_col);
-
-    println!("max bit_len: {}", bit_len);
+    let status = |range| {
+        print!("{:05X}\r", range);
+        std::io::stdout().flush().unwrap();
+    };
+    println!("update_download_missing");
+    HIBPDB::update_download_missing(get_runtime(), dbdir.as_path(), status).unwrap();
+    println!("update_construct_columns");
+    HIBPDB::update_construct_columns(dbdir.as_path(), status).unwrap();
+    println!("update_frequency_index");
+    HIBPDB::update_frequency_index(dbdir.as_path()).unwrap();
 
 }
 

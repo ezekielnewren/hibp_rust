@@ -22,6 +22,7 @@ use xz2::write::XzEncoder;
 use serde::{Serialize, Deserialize};
 
 use tokio::runtime::Runtime;
+use crate::minbitrep::MinBitRep;
 
 pub type HASH = [u8; 16];
 
@@ -47,20 +48,14 @@ pub fn get_runtime() -> &'static Runtime {
      TOKIO_RUNTIME.deref()
 }
 
-pub fn compute_offset(slice: &[HASH], bit_len: u32) -> Vec<usize> {
+pub fn compute_offset(slice: &[HASH], bit_len: u8) -> Vec<usize> {
     let mut offset: Vec<usize> = Vec::new();
     let mut prev = (1<<bit_len)-1;
     (0..slice.len()).into_iter().for_each(|i| {
         let v = u128::from_be_bytes(slice[i]);
         let cur = (v>>(128-bit_len)) as usize;
         if prev != cur {
-            if prev < cur {
-                for _ in prev..cur {
-                    offset.push(i);
-                }
-            } else {
-                offset.push(i);
-            }
+            offset.push(i);
             prev = cur;
         }
     });
@@ -68,6 +63,31 @@ pub fn compute_offset(slice: &[HASH], bit_len: u32) -> Vec<usize> {
     return offset;
 }
 
+pub fn max_bit_prefix(hash_col: &[HASH]) -> u8 {
+    let mut bit_len = MinBitRep::minbit(hash_col.len() as u64) as u8;
+    while bit_len >= 1 {
+        let mut max_population = true;
+        let mut prev = (1<<bit_len)-1;
+        for i in 0..hash_col.len() {
+            let v = &hash_col[i];
+            let cur = (u128::from_be_bytes(*v)>>(128-bit_len)) as usize;
+            if prev != cur {
+                if prev < cur && prev+1 != cur {
+                    max_population = false;
+                    break;
+                } else {
+                    prev = cur;
+                }
+            }
+        }
+        if max_population {
+            break;
+        }
+        bit_len -= 1;
+    }
+
+    return bit_len;
+}
 
 pub struct DownloadError {
     range: u32,

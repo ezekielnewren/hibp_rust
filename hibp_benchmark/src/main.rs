@@ -10,6 +10,7 @@ use thousands::Separable;
 use clap::Parser;
 use hibp_core::db::HIBPDB;
 use rayon::prelude::*;
+use hibp_core::minbitrep::MinBitRep;
 
 pub fn timeit<F>(min_runtime: Duration, mut inner: F) -> u64
     where F: FnMut(),
@@ -211,17 +212,16 @@ fn max_avg_variance(args: &Args) {
     println!("avg_var: {}", avg_var);
 }
 
+
 fn sandbox(args: &Args) {
     let dbdir = PathBuf::from(args.dbdirectory.clone());
     let db = HIBPDB::open(dbdir.as_path()).unwrap();
 
     let hash_col = db.hash_col.as_slice();
-    let bit_len = 24;
-    let offset = compute_offset(hash_col, bit_len);
-    let max_range = (0usize..(1<<bit_len)).into_iter().map(|i| offset[i+1]-offset[i]).max().unwrap();
+    let bit_len = max_bit_prefix(hash_col);
 
-    println!("max_range: {}", max_range);
-    println!("calc_max_range: {}", hash_col.len()/(1<<bit_len));
+    println!("max bit_len: {}", bit_len);
+
 }
 
 fn main() {
@@ -323,12 +323,12 @@ fn main() {
         })
     });
 
-    b.register("dbquery_miss_offset24_binary_search", |args| {
+    b.register("dbquery_miss_bitprefix_binary_search", |args| {
         let dbdir = PathBuf::from(args.dbdirectory.clone());
         let db = HIBPDB::open(dbdir.as_path()).unwrap();
         let mut rng = RandomItemGenerator::<HASH>::new(BUFFER_SIZE);
 
-        let bit_len = 24;
+        let bit_len = max_bit_prefix(db.hash());
         let off = compute_offset(db.hash(), bit_len);
 
         return Box::new(move || {
@@ -338,12 +338,12 @@ fn main() {
         })
     });
 
-    b.register("dbquery_hit_offset24_binary_search", |args| {
+    b.register("dbquery_hit_bitprefix_binary_search", |args| {
         let dbdir = PathBuf::from(args.dbdirectory.clone());
         let db = HIBPDB::open(dbdir.as_path()).unwrap();
         let mut rng = RandomItemGenerator::<usize>::new(BUFFER_SIZE);
 
-        let bit_len = 24;
+        let bit_len = max_bit_prefix(db.hash());
         let off = compute_offset(db.hash(), bit_len);
 
         return Box::new(move || {

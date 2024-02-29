@@ -343,12 +343,13 @@ fn main() {
         let mut rng = RandomItemGenerator::<HASH>::new(BUFFER_SIZE);
 
         let bit_len = max_bit_prefix(db.hash());
-        let off = compute_offset(db.hash(), bit_len);
+        let mut off = vec![0u64; (1<<bit_len)+1];
+        compute_offset(db.hash(), off.as_mut_slice(), bit_len);
 
         return Box::new(move || {
             let key = rng.next_item();
             let t = (u128::from_be_bytes(*key)>>(128-bit_len)) as usize;
-            let _ = db.hash()[off[t]..off[t+1]].binary_search(key);
+            let _ = db.hash()[off[t] as usize..off[t+1] as usize].binary_search(key);
         })
     });
 
@@ -358,13 +359,14 @@ fn main() {
         let mut rng = RandomItemGenerator::<usize>::new(BUFFER_SIZE);
 
         let bit_len = max_bit_prefix(db.hash());
-        let off = compute_offset(db.hash(), bit_len);
+        let mut off = vec![0u64; (1<<bit_len)+1];
+        compute_offset(db.hash(), off.as_mut_slice(), bit_len);
 
         return Box::new(move || {
             let i: usize = (*rng.next_item())%db.len();
             let key: &HASH = &db.hash()[i];
             let t = (u128::from_be_bytes(*key)>>(128-bit_len)) as usize;
-            let _ = db.hash()[off[t]..off[t+1]].binary_search(key);
+            let _ = db.hash()[off[t] as usize..off[t+1] as usize].binary_search(key);
         })
     });
 

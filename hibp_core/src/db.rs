@@ -3,7 +3,7 @@ use std::fs::{File, OpenOptions};
 use std::mem::size_of;
 use std::io::{BufRead, ErrorKind, Read, Write};
 use std::path::{Path, PathBuf};
-use crate::{compress_xz, convert_range, download_range, extract_gz, extract_xz, HASH, HashRange, InterpolationSearch};
+use crate::{compress_xz, compute_offset, convert_range, download_range, extract_gz, extract_xz, HASH, HashRange, InterpolationSearch, max_bit_prefix};
 
 use futures::stream::{FuturesUnordered};
 use futures::StreamExt;
@@ -237,6 +237,20 @@ impl<'a> HIBPDB<'a> {
             password_slice[i] = u64::MAX;
         }
         password_fa.sync()?;
+
+
+        let file_hash = dbdir.join("hash.col");
+        let hash_col = FileArray::<HASH>::open(file_hash.as_path())?;
+        let hash_slice = hash_col.as_slice();
+
+        let bit_len = max_bit_prefix(hash_slice);
+
+        let file_hash_bitprefix = dbdir.join("bitprefix.bin");
+        let mut bitprefix_fa = FileArrayMut::<u64>::open(file_hash_bitprefix.as_path(), (1<<bit_len)+1)?;
+        let offset = bitprefix_fa.as_mut_slice();
+
+        compute_offset(hash_slice, offset, bit_len);
+        bitprefix_fa.sync()?;
 
         Ok(())
     }

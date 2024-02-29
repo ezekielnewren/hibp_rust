@@ -93,7 +93,6 @@ fn update(args: Args) {
 
 fn construct(args: Args) {
     let dbdir = PathBuf::from(args.dbdirectory);
-    let db = HIBPDB::open(dbdir.as_path()).unwrap();
 
     let status: fn(u32) = |range| {
         println!("{:05X}", range);

@@ -48,19 +48,19 @@ pub fn get_runtime() -> &'static Runtime {
      TOKIO_RUNTIME.deref()
 }
 
-pub fn compute_offset(slice: &[HASH], bit_len: u8) -> Vec<usize> {
-    let mut offset: Vec<usize> = Vec::new();
+pub fn compute_offset(slice: &[HASH], offset: &mut [u64], bit_len: u8) {
+    let mut j = 0usize;
     let mut prev = (1<<bit_len)-1;
     (0..slice.len()).into_iter().for_each(|i| {
         let v = u128::from_be_bytes(slice[i]);
         let cur = (v>>(128-bit_len)) as usize;
         if prev != cur {
-            offset.push(i);
+            offset[j] = i as u64;
+            j += 1;
             prev = cur;
         }
     });
-    offset.push(slice.len());
-    return offset;
+    offset[j] = slice.len() as u64;
 }
 
 pub fn max_bit_prefix(hash_col: &[HASH]) -> u8 {

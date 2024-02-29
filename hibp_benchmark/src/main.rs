@@ -10,7 +10,6 @@ use thousands::Separable;
 use clap::Parser;
 use hibp_core::db::HIBPDB;
 use rayon::prelude::*;
-use hibp_core::minbitrep::MinBitRep;
 
 pub fn timeit<F>(min_runtime: Duration, mut inner: F) -> u64
     where F: FnMut(),
@@ -161,8 +160,7 @@ pub fn r_squared<T, F>(slice: &[T], c: fn(&T) -> f64, f: &F) -> f64
 }
 
 
-fn linear_regression_fitness(args: &Args) {
-    let dbdir = PathBuf::from(args.dbdirectory.clone());
+pub fn linear_regression_fitness(dbdir: PathBuf) {
     let db = HIBPDB::open(dbdir.as_path()).unwrap();
 
     let hash_col = db.hash_col.as_slice();
@@ -181,9 +179,7 @@ fn linear_regression_fitness(args: &Args) {
     println!("linear_regression: {}", fitness1);
 }
 
-fn max_avg_variance(args: &Args) {
-
-    let dbdir = PathBuf::from(args.dbdirectory.clone());
+pub fn max_avg_variance(dbdir: PathBuf) {
     let db = HIBPDB::open(dbdir.as_path()).unwrap();
 
     let hash_col = db.hash_col.as_slice();

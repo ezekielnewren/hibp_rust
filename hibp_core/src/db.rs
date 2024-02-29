@@ -1,7 +1,6 @@
 use std::{fs, io};
 use std::fs::{File, OpenOptions};
-use std::mem::size_of;
-use std::io::{BufRead, ErrorKind, Read, Write};
+use std::io::{BufRead, ErrorKind, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use crate::{compress_xz, compute_offset, convert_range, download_range, extract_gz, extract_xz, HASH, HashRange, max_bit_prefix};
 
@@ -9,9 +8,50 @@ use futures::stream::{FuturesUnordered};
 use futures::StreamExt;
 use tokio::runtime::Runtime;
 use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
 use crate::file_array::{FileArray, FileArrayMut};
 use crate::minbitrep::MinBitRep;
 use crate::transform::{Transform, TransformConcurrent};
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Journal {
+    pub offset: u64,
+    pub entry: Vec<(u64, u64, Vec<u8>)>,
+    #[serde(skip)]
+    pub wp: u64,
+}
+
+impl Journal {
+
+    pub fn open(pathname: &Path) -> io::Result<Self> {
+        let mut fd = File::open(pathname)?;
+        let mut buff = Vec::<u8>::new();
+        fd.read_to_end(&mut buff)?;
+        let r = serde_cbor::from_slice::<Journal>(buff.as_slice());
+        match r {
+            Ok(v) => Ok(v),
+            Err(e) => return Err(io::Error::new(ErrorKind::InvalidInput, e)),
+        }
+    }
+
+    pub fn new(offset: u64) -> Self {
+        let mut it = Self {
+            offset,
+            entry: vec![],
+            wp: 0,
+        };
+        it.reset(offset);
+        return it;
+    }
+
+    pub fn reset(&mut self, offset: u64) {
+        self.offset = offset;
+        self.entry.clear();
+        self.wp = 0;
+    }
+
+}
+
 
 pub struct HIBPDB<'a> {
     pub dbdir: PathBuf,
@@ -20,7 +60,9 @@ pub struct HIBPDB<'a> {
     pub hash_offset_bit_len: u8,
     pub frequency_col: FileArray<'a, u64>,
     pub frequency_idx: FileArray<'a, u64>,
-    pub password_col: FileArray<'a, u64>,
+    pub password_col: FileArrayMut<'a, u64>,
+    pub password_txt: File,
+    pub journal: Journal,
 }
 
 impl<'a> HIBPDB<'a> {
@@ -30,20 +72,95 @@ impl<'a> HIBPDB<'a> {
         let frequency_col_file = v.join("frequency.col");
         let frequency_idx_file = v.join("frequency.idx");
         let password_col_file = v.join("password.col");
+        let password_txt_file = v.join("password.txt");
 
         let t = FileArray::open(hash_offset_file.as_path())?;
         let bit_len = MinBitRep::minbit((t.len()-2) as u64);
 
-        Ok(Self {
+        let password_txt = OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .truncate(false)
+            .append(true)
+            .open(password_txt_file)?;
+
+        let offset = password_txt.metadata()?.len();
+
+        let mut db = Self {
             dbdir: PathBuf::from(v),
             hash_col: FileArray::open(hash_file.as_path())?,
             hash_offset: t,
             hash_offset_bit_len: bit_len,
             frequency_col: FileArray::open(frequency_col_file.as_path())?,
             frequency_idx: FileArray::open(frequency_idx_file.as_path())?,
-            password_col: FileArray::open(password_col_file.as_path())?,
-        })
+            password_col: FileArrayMut::open(password_col_file.as_path(), 0)?,
+            password_txt,
+            journal: Journal::new(offset),
+        };
+
+        db._apply_journal()?;
+
+        return Ok(db);
     }
+
+    pub fn submit(&mut self, index: usize, password: &[u8]) {
+        let off = self.journal.offset+self.journal.wp;
+        self.journal.entry.push((index as u64, off, Vec::from(password)));
+        self.journal.wp += password.len() as u64;
+    }
+
+    pub fn _apply_journal(&mut self) -> io::Result<()> {
+        let file_journal = self.dbdir.join("journal.bin");
+        if ! file_journal.exists() {
+            self.journal.reset(self.password_txt.metadata()?.len());
+            return Ok(());
+        }
+
+        self.journal = Journal::open(file_journal.as_path())?;
+
+        self.password_txt.set_len(self.journal.offset)?;
+        self.password_txt.seek(SeekFrom::Start(self.journal.offset))?;
+        for (index, offset, password) in &self.journal.entry {
+            self.password_col.as_mut_slice()[*index as usize] = *offset;
+            self.password_txt.write_all(password.as_slice())?;
+        }
+        self.password_txt.flush()?;
+        self.password_txt.sync_all()?;
+        self.password_col.sync()?;
+
+        fs::remove_file(file_journal.as_path())?;
+
+        self.journal.reset(self.password_txt.metadata()?.len());
+
+        Ok(())
+    }
+    pub fn commit(&mut self) -> io::Result<()> {
+        let file_tmp = self.dbdir.join("tmp.journal.bin");
+        let file_journal = self.dbdir.join("journal.bin");
+        {
+            let mut journal_tmp = OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(file_tmp.as_path())?;
+
+            let r = serde_cbor::to_vec(&self.journal);
+            match r {
+                Ok(out) => {
+                    journal_tmp.write_all(out.as_slice())?;
+                    journal_tmp.flush()?;
+                    journal_tmp.sync_all()?;
+                }
+                Err(e) => return Err(io::Error::new(ErrorKind::InvalidInput, e)),
+            }
+
+        }
+        fs::rename(file_tmp.as_path(), file_journal.as_path())?;
+
+        self._apply_journal()
+    }
+
 
     pub fn save(prefix: &Path, hr: HashRange) -> io::Result<()> {
         let file_name = HashRange::name(hr.range);
@@ -205,24 +322,23 @@ impl<'a> HIBPDB<'a> {
             }
         }
 
-        let db_len = file_hash.metadata()?.len() as usize/size_of::<HASH>();
+        Ok(())
+    }
+
+    pub fn update_hash_offset_and_password_col(dbdir: &Path) -> io::Result<()> {
+        let file_hash = dbdir.join("hash.col");
+
+        let hash_col = FileArray::<HASH>::open(file_hash.as_path())?;
+        let hash_slice = hash_col.as_slice();
 
         let file_password = dbdir.join("password.col");
-        let mut password_fa = FileArrayMut::<u64>::open(file_password.as_path(), db_len)?;
+        let mut password_fa = FileArrayMut::<u64>::open(file_password.as_path(), hash_slice.len())?;
         let password_slice = password_fa.as_mut_slice();
 
         for i in 0..password_slice.len() {
             password_slice[i] = u64::MAX;
         }
         password_fa.sync()?;
-
-        Ok(())
-    }
-
-    pub fn update_hash_offset(dbdir: &Path) -> io::Result<()> {
-        let file_hash = dbdir.join("hash.col");
-        let hash_col = FileArray::<HASH>::open(file_hash.as_path())?;
-        let hash_slice = hash_col.as_slice();
 
         let bit_len = max_bit_prefix(hash_slice);
 
@@ -276,7 +392,11 @@ impl<'a> HIBPDB<'a> {
         let prefix = (u128::from_be_bytes(*key)>>(128-self.hash_offset_bit_len)) as usize;
         let lo = self.hash_offset.as_slice()[prefix] as usize;
         let hi = self.hash_offset.as_slice()[prefix+1] as usize;
-        self.hash()[lo..hi].binary_search(key)
+        let r = self.hash()[lo..hi].binary_search(key);
+        match r {
+            Ok(v) => Ok(lo+v),
+            Err(v) => Err(lo+v),
+        }
     }
 
     pub fn len(&self) -> usize {

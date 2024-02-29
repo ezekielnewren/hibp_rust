@@ -65,13 +65,27 @@ fn ingest(args: Args) {
         }
 
         match db.find(&hp.hash) {
-            Ok(_) => found += 1,
+            Ok(i) => {
+                let pc = db.password_col.as_mut_slice();
+                if pc[i] == u64::MAX {
+                    hp.password.push(b'\n');
+                    db.submit(i, hp.password.as_slice());
+                }
+
+                found += 1
+            },
             Err(_) => miss += 1,
         }
 
-        linecount += 1;
+        if db.journal.entry.len() >= 1000 {
+            db.commit().unwrap();
+        }
 
+        linecount += 1;
     }
+
+    db.commit().unwrap();
+
 
     let seconds = start.elapsed().as_secs_f64();
     let rate = (linecount as f64 / seconds) as u64;

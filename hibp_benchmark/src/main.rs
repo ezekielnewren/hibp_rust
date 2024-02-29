@@ -220,8 +220,8 @@ fn sandbox(args: &Args) {
     // HIBPDB::update_download_missing(get_runtime(), dbdir.as_path(), status).unwrap();
     // println!("update_construct_columns");
     // HIBPDB::update_construct_columns(dbdir.as_path(), status).unwrap();
-    println!("update_hash_offset");
-    HIBPDB::update_hash_offset(dbdir.as_path()).unwrap();
+    println!("update_hash_offset_and_password_col");
+    HIBPDB::update_hash_offset_and_password_col(dbdir.as_path()).unwrap();
     // println!("update_frequency_index");
     // HIBPDB::update_frequency_index(dbdir.as_path()).unwrap();
 

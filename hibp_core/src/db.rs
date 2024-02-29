@@ -3,18 +3,21 @@ use std::fs::{File, OpenOptions};
 use std::mem::size_of;
 use std::io::{BufRead, ErrorKind, Read, Write};
 use std::path::{Path, PathBuf};
-use crate::{compress_xz, compute_offset, convert_range, download_range, extract_gz, extract_xz, HASH, HashRange, InterpolationSearch, max_bit_prefix};
+use crate::{compress_xz, compute_offset, convert_range, download_range, extract_gz, extract_xz, HASH, HashRange, max_bit_prefix};
 
 use futures::stream::{FuturesUnordered};
 use futures::StreamExt;
 use tokio::runtime::Runtime;
 use rayon::prelude::*;
 use crate::file_array::{FileArray, FileArrayMut};
+use crate::minbitrep::MinBitRep;
 use crate::transform::{Transform, TransformConcurrent};
 
 pub struct HIBPDB<'a> {
     pub dbdir: PathBuf,
     pub hash_col: FileArray<'a, HASH>,
+    pub hash_offset: FileArray<'a, u64>,
+    pub hash_offset_bit_len: u8,
     pub frequency_col: FileArray<'a, u64>,
     pub frequency_idx: FileArray<'a, u64>,
     pub password_col: FileArray<'a, u64>,
@@ -23,13 +26,19 @@ pub struct HIBPDB<'a> {
 impl<'a> HIBPDB<'a> {
     pub fn open(v: &Path) -> io::Result<Self> {
         let hash_file = v.join("hash.col");
+        let hash_offset_file = v.join("hash_offset.bin");
         let frequency_col_file = v.join("frequency.col");
         let frequency_idx_file = v.join("frequency.idx");
         let password_col_file = v.join("password.col");
 
+        let t = FileArray::open(hash_offset_file.as_path())?;
+        let bit_len = MinBitRep::minbit((t.len()-2) as u64);
+
         Ok(Self {
             dbdir: PathBuf::from(v),
             hash_col: FileArray::open(hash_file.as_path())?,
+            hash_offset: t,
+            hash_offset_bit_len: bit_len,
             frequency_col: FileArray::open(frequency_col_file.as_path())?,
             frequency_idx: FileArray::open(frequency_idx_file.as_path())?,
             password_col: FileArray::open(password_col_file.as_path())?,
@@ -245,12 +254,12 @@ impl<'a> HIBPDB<'a> {
 
         let bit_len = max_bit_prefix(hash_slice);
 
-        let file_hash_bitprefix = dbdir.join("bitprefix.bin");
-        let mut bitprefix_fa = FileArrayMut::<u64>::open(file_hash_bitprefix.as_path(), (1<<bit_len)+1)?;
-        let offset = bitprefix_fa.as_mut_slice();
+        let hash_offset_file = dbdir.join("hash_offset.bin");
+        let mut hash_offset_fa = FileArrayMut::<u64>::open(hash_offset_file.as_path(), (1<<bit_len)+1)?;
+        let hash_offset = hash_offset_fa.as_mut_slice();
 
-        compute_offset(hash_slice, offset, bit_len);
-        bitprefix_fa.sync()?;
+        compute_offset(hash_slice, hash_offset, bit_len);
+        hash_offset_fa.sync()?;
 
         Ok(())
     }
@@ -261,7 +270,10 @@ impl<'a> HIBPDB<'a> {
     }
 
     pub fn find(self: &mut Self, key: &HASH) -> Result<usize, usize> {
-        self.hash().interpolation_search(key)
+        let prefix = (u128::from_be_bytes(*key)>>(128-self.hash_offset_bit_len)) as usize;
+        let lo = self.hash_offset.as_slice()[prefix] as usize;
+        let hi = self.hash_offset.as_slice()[prefix+1] as usize;
+        self.hash()[lo..hi].binary_search(key)
     }
 
     pub fn len(&self) -> usize {

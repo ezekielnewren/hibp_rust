@@ -9,8 +9,8 @@ pub struct MinBitRep<'a> {
 
 
 impl<'a> MinBitRep<'a> {
-    pub fn minbit(x: u64) -> u64 {
-        max(64-u64::leading_zeros(x) as u64, 1)
+    pub fn minbit(x: u64) -> u8 {
+        max((64-u64::leading_zeros(x) as u64) as u8, 1)
     }
 
     pub fn calculate_array_size(len: usize, max_value: u64) -> usize {

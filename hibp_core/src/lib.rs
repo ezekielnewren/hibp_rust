@@ -47,6 +47,28 @@ pub fn get_runtime() -> &'static Runtime {
      TOKIO_RUNTIME.deref()
 }
 
+pub fn compute_offset(slice: &[HASH], bit_len: u32) -> Vec<usize> {
+    let mut offset: Vec<usize> = Vec::new();
+    let mut prev = (1<<bit_len)-1;
+    (0..slice.len()).into_iter().for_each(|i| {
+        let v = u128::from_be_bytes(slice[i]);
+        let cur = (v>>(128-bit_len)) as usize;
+        if prev != cur {
+            if prev < cur {
+                for _ in prev..cur {
+                    offset.push(i);
+                }
+            } else {
+                offset.push(i);
+            }
+            prev = cur;
+        }
+    });
+    offset.push(slice.len());
+    return offset;
+}
+
+
 pub struct DownloadError {
     range: u32,
 }

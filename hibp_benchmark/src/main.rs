@@ -180,7 +180,7 @@ fn linear_regression_fitness(args: &Args) {
     println!("linear_regression: {}", fitness1);
 }
 
-fn sandbox(args: &Args) {
+fn max_avg_variance(args: &Args) {
 
     let dbdir = PathBuf::from(args.dbdirectory.clone());
     let db = HIBPDB::open(dbdir.as_path()).unwrap();
@@ -209,6 +209,19 @@ fn sandbox(args: &Args) {
 
     println!("max_var: {}", max_var);
     println!("avg_var: {}", avg_var);
+}
+
+fn sandbox(args: &Args) {
+    let dbdir = PathBuf::from(args.dbdirectory.clone());
+    let db = HIBPDB::open(dbdir.as_path()).unwrap();
+
+    let hash_col = db.hash_col.as_slice();
+    let bit_len = 24;
+    let offset = compute_offset(hash_col, bit_len);
+    let max_range = (0usize..(1<<bit_len)).into_iter().map(|i| offset[i+1]-offset[i]).max().unwrap();
+
+    println!("max_range: {}", max_range);
+    println!("calc_max_range: {}", hash_col.len()/(1<<bit_len));
 }
 
 fn main() {
@@ -307,6 +320,37 @@ fn main() {
         return Box::new(move || {
             let key = rng.next_item();
             let _ = db.hash().binary_search(key);
+        })
+    });
+
+    b.register("dbquery_miss_offset24_binary_search", |args| {
+        let dbdir = PathBuf::from(args.dbdirectory.clone());
+        let db = HIBPDB::open(dbdir.as_path()).unwrap();
+        let mut rng = RandomItemGenerator::<HASH>::new(BUFFER_SIZE);
+
+        let bit_len = 24;
+        let off = compute_offset(db.hash(), bit_len);
+
+        return Box::new(move || {
+            let key = rng.next_item();
+            let t = (u128::from_be_bytes(*key)>>(128-bit_len)) as usize;
+            let _ = db.hash()[off[t]..off[t+1]].binary_search(key);
+        })
+    });
+
+    b.register("dbquery_hit_offset24_binary_search", |args| {
+        let dbdir = PathBuf::from(args.dbdirectory.clone());
+        let db = HIBPDB::open(dbdir.as_path()).unwrap();
+        let mut rng = RandomItemGenerator::<usize>::new(BUFFER_SIZE);
+
+        let bit_len = 24;
+        let off = compute_offset(db.hash(), bit_len);
+
+        return Box::new(move || {
+            let i: usize = (*rng.next_item())%db.len();
+            let key: &HASH = &db.hash()[i];
+            let t = (u128::from_be_bytes(*key)>>(128-bit_len)) as usize;
+            let _ = db.hash()[off[t]..off[t+1]].binary_search(key);
         })
     });
 

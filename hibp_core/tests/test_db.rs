@@ -3,7 +3,7 @@ use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
 use hibp_core::db::HIBPDB;
-use hibp_core::{get_runtime, HASH_to_hex};
+use hibp_core::{compute_offset, get_runtime, HASH_to_hex};
 use hibp_core::minbitrep::MinBitRep;
 
 fn get_dbdir() -> PathBuf {
@@ -77,20 +77,33 @@ pub fn test_chunked_range() {
 
     let mut card = [0u64; 64];
 
-    for i in 1..card.len() {
-
-        for j in 0..hash_col.len() {
-            let v = u128::from_be_bytes(hash_col[j]);
-            hash_col[j] = v.to_be_bytes();
-        }
-
-    }
-
     for i in 0..card.len() {
         let line = format!("{}:{}\n", i, card[i]);
         fd.write_all(line.as_bytes()).unwrap();
     }
 }
 
+
+#[test]
+pub fn test_compute_offset() {
+    let db = HIBPDB::open(get_dbdir().as_path()).unwrap();
+
+    let hash_col = db.hash_col.as_slice();
+
+    let bit_len = 29;
+    let off = compute_offset(hash_col, bit_len);
+
+    assert!(off.len() > 0);
+
+    let mut empty = 0;
+    for i in 0..(1<<bit_len) {
+        let diff = off[i+1]-off[i];
+        if diff == 0 {
+            empty += 1;
+        }
+    }
+
+    assert!(empty >= 0);
+}
 
 

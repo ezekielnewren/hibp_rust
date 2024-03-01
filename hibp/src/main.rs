@@ -34,6 +34,7 @@ fn ingest(args: Args) {
     let mut buff: Vec<u8> = Vec::new();
 
     let mut linecount = 0u64;
+    let mut new_password = 0u64;
     let mut found = 0u64;
     let mut miss = 0u64;
 
@@ -70,6 +71,7 @@ fn ingest(args: Args) {
                 if pc[i] == u64::MAX {
                     hp.password.push(b'\n');
                     db.submit(i, hp.password.as_slice());
+                    new_password += 1;
                 }
 
                 found += 1
@@ -91,7 +93,7 @@ fn ingest(args: Args) {
     let rate = (linecount as f64 / seconds) as u64;
 
     let invalid_utf8 = linecount - (found + miss);
-    println!("lines: {}, invalid_utf8: {}, found: {}, miss: {}", linecount, invalid_utf8, found, miss);
+    println!("lines: {}, invalid_utf8: {}, new: {}, found: {}, miss: {}", linecount, invalid_utf8, new_password, found, miss);
     println!("rate: {}", rate)
 }
 

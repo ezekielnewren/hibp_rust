@@ -4,7 +4,7 @@ use std::io::{BufRead, BufReader, ErrorKind, Read, Seek, SeekFrom, Write};
 use std::mem::size_of;
 use std::path::{Path, PathBuf};
 use bit_vec::BitVec;
-use crate::{compress_gz, compress_xz, compute_offset, convert_range, download_range, extract_gz, extract_xz, HASH, HashRange, max_bit_prefix};
+use crate::{compress_gz, compress_xz, compute_offset, convert_range, download_range, extract_gz, extract_xz, HASH, HashRange, IndexAndPasswordIterator, max_bit_prefix};
 
 use futures::stream::{FuturesUnordered};
 use futures::StreamExt;
@@ -76,22 +76,13 @@ impl<'a> HIBPDB<'a> {
 
             self.password.seek(SeekFrom::Start(end))?;
         };
-        let mut off = self.password.stream_position()?;
-        let mut reader = BufReader::new(&self.password);
-
-        let mut buff = Vec::<u8>::new();
-        loop {
-            buff.clear();
-            let read = reader.read_until(b'\n', &mut buff)? as u64;
-            if read <= 8 {
-                self.password.set_len(off).unwrap();
-                break;
-            }
-            off += read;
-
-            let i = u64::from_le_bytes(buff.as_slice()[0..8].try_into().unwrap());
+        let off = self.password.stream_position()?;
+        let mut it = IndexAndPasswordIterator::new(BufReader::new(&self.password));
+        let read = it.for_each(|i, _| {
             self.password_bitset.set(i as usize, true);
-        }
+        });
+
+        self.password.set_len(off+read)?;
 
         self.password.seek(SeekFrom::End(0))?;
 
@@ -247,23 +238,14 @@ impl<'a> HIBPDB<'a> {
         let mut bm = BitVec::new();
         bm.grow(db_len, false);
 
-        let mut off = 0;
-        fd.seek(SeekFrom::Start(off))?;
-        let mut reader = BufReader::new(&fd);
-
-        let mut buff = Vec::<u8>::new();
-        loop {
-            buff.clear();
-            let read = reader.read_until(b'\n', &mut buff)? as u64;
-            if read <= 8 {
-                fd.set_len(off)?;
-                break;
-            }
-            off += read;
-
-            let i = u64::from_le_bytes(buff[0..8].try_into().unwrap());
+        let off = fd.stream_position()?;
+        let mut it = IndexAndPasswordIterator::new(BufReader::new(&fd));
+        let read = it.for_each(|i, _| {
             bm.set(i as usize, true);
-        }
+        });
+
+        let end = off+read;
+        fd.set_len(end)?;
 
         let tmp = bm.to_bytes();
         let small = compress_gz(tmp.as_slice())?;
@@ -276,7 +258,7 @@ impl<'a> HIBPDB<'a> {
             .append(false)
             .open(file_tmp.as_path())?;
 
-        fd.write_all(&off.to_le_bytes())?;
+        fd.write_all(&end.to_le_bytes())?;
         fd.write_all(small.as_slice())?;
         fd.flush()?;
         fd.sync_all()?;

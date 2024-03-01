@@ -1,6 +1,6 @@
 use std::env;
 use std::fs::{File, OpenOptions};
-use std::io::Write;
+use std::io::{BufRead, BufReader, ErrorKind, Read, Write};
 use std::path::PathBuf;
 use hibp_core::db::HIBPDB;
 use hibp_core::{compute_offset, get_runtime, HASH_to_hex};
@@ -105,5 +105,14 @@ pub fn test_compute_offset() {
 
     assert!(empty >= 0);
 }
+
+
+
+#[test]
+pub fn test_password_iterator() {
+    let db = HIBPDB::open(get_dbdir().as_path()).unwrap();
+
+}
+
 
 

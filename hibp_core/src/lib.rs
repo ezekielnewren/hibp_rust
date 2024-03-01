@@ -7,7 +7,8 @@ pub mod file_array;
 use std::fmt::{Debug, Formatter};
 use std::mem::{size_of};
 use std::{io, slice};
-use std::io::{BufRead, ErrorKind, Read, Write};
+use std::fs::File;
+use std::io::{BufRead, BufReader, ErrorKind, Read, Write};
 use std::ops::Deref;
 use std::str::Utf8Error;
 use std::sync::Arc;
@@ -382,3 +383,49 @@ pub fn dir_list(path: &str) -> std::io::Result<Vec<String>> {
     return Ok(list);
 }
 
+
+pub struct IndexAndPasswordIterator<'a> {
+    buff: Vec<u8>,
+    reader: BufReader<&'a File>,
+}
+
+impl<'a> IndexAndPasswordIterator<'a> {
+    pub fn new(inner: BufReader<&'a File>) -> Self {
+        Self {
+            buff: vec![],
+            reader: inner,
+        }
+    }
+}
+
+impl<'a> IndexAndPasswordIterator<'a> {
+    fn for_each<F>(&mut self, mut f: F) -> u64
+        where F: FnMut(u64, &[u8])
+    {
+        let mut off = 0;
+        loop {
+            self.buff.resize(8, 0u8);
+            let r = self.reader.read_exact(self.buff.as_mut_slice());
+            match r {
+                Ok(_) => {}
+                Err(e) => {
+                    if e.kind() != ErrorKind::UnexpectedEof {
+                        panic!("{}", e);
+                    }
+                },
+            }
+            let i = u64::from_le_bytes(self.buff[0..8].try_into().unwrap());
+
+            let read = self.reader.read_until(b'\n', &mut self.buff).unwrap();
+            if read <= 0 {
+                break;
+            }
+
+            f(i, &self.buff[8..]);
+
+            off += self.buff.len() as u64;
+        }
+
+        return off;
+    }
+}

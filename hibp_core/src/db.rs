@@ -1,15 +1,15 @@
 use std::{fs, io};
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, ErrorKind, Read, Seek, SeekFrom, Write};
+use std::mem::size_of;
 use std::path::{Path, PathBuf};
-use bit_set::BitSet;
-use crate::{compress_xz, compute_offset, convert_range, download_range, extract_gz, extract_xz, HASH, HashRange, max_bit_prefix};
+use bit_vec::BitVec;
+use crate::{compress_gz, compress_xz, compute_offset, convert_range, download_range, extract_gz, extract_xz, HASH, HashRange, max_bit_prefix};
 
 use futures::stream::{FuturesUnordered};
 use futures::StreamExt;
 use tokio::runtime::Runtime;
 use rayon::prelude::*;
-use serde::{Deserialize, Serialize};
 use crate::file_array::{FileArray, FileArrayMut};
 use crate::minbitrep::MinBitRep;
 use crate::transform::{Transform, TransformConcurrent};
@@ -22,7 +22,7 @@ pub struct HIBPDB<'a> {
     pub frequency_col: FileArray<'a, u64>,
     pub frequency_idx: FileArray<'a, u64>,
     pub password: File,
-    pub password_bitset: BitSet,
+    pub password_bitset: bit_vec::BitVec,
     pub password_buff: Vec<u8>,
 }
 
@@ -53,7 +53,7 @@ impl<'a> HIBPDB<'a> {
             frequency_col: FileArray::open(frequency_col_file.as_path())?,
             frequency_idx: FileArray::open(frequency_idx_file.as_path())?,
             password,
-            password_bitset: BitSet::new(),
+            password_bitset: BitVec::new(),
             password_buff: vec![],
         };
 
@@ -63,26 +63,34 @@ impl<'a> HIBPDB<'a> {
     }
 
     fn _init(&mut self) -> io::Result<()> {
-        let fsize = self.password.metadata()?.len();
-
+        let password_bitset_file = self.dbdir.join("password.bm");
         self.password.seek(SeekFrom::Start(0))?;
+        if password_bitset_file.exists() {
+            let mut buff = Vec::<u8>::new();
+            let mut fd = File::open(password_bitset_file)?;
+            fd.read_to_end(&mut buff)?;
+
+            let end = u64::from_le_bytes(buff.as_slice()[0..8].try_into().unwrap());
+            let raw = extract_gz(&buff[8..])?;
+            self.password_bitset = BitVec::from_bytes(raw.as_slice());
+
+            self.password.seek(SeekFrom::Start(end))?;
+        };
+        let mut off = self.password.stream_position()?;
         let mut reader = BufReader::new(&self.password);
 
         let mut buff = Vec::<u8>::new();
         loop {
-            let off = reader.stream_position()?;
-            if fsize-off <= 8 {
-                self.password.set_len(off)?;
+            buff.clear();
+            let read = reader.read_until(b'\n', &mut buff)? as u64;
+            if read <= 8 {
+                self.password.set_len(off).unwrap();
                 break;
             }
-            buff.resize(8, 0u8);
-            reader.read_exact(buff.as_mut_slice())?;
+            off += read;
 
-            let i = u64::from_le_bytes(buff.as_slice().try_into().unwrap());
-            self.password_bitset.insert(i as usize);
-
-            buff.resize(0, 0u8);
-            reader.read_until(b'\n', &mut buff)?;
+            let i = u64::from_le_bytes(buff.as_slice()[0..8].try_into().unwrap());
+            self.password_bitset.set(i as usize, true);
         }
 
         self.password.seek(SeekFrom::End(0))?;
@@ -222,6 +230,60 @@ impl<'a> HIBPDB<'a> {
         };
 
         rt.block_on(fut)
+    }
+
+    pub fn update_password_metadata(dbdir: &Path) -> io::Result<()> {
+        let password_file = dbdir.join("password.bin");
+        let mut fd = OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .truncate(false)
+            .append(false)
+            .open(password_file)?;
+
+        let db_len = fs::metadata(dbdir.join("hash.col"))?.len() as usize/size_of::<HASH>();
+
+        let mut bm = BitVec::new();
+        bm.grow(db_len, false);
+
+        let mut off = 0;
+        fd.seek(SeekFrom::Start(off))?;
+        let mut reader = BufReader::new(&fd);
+
+        let mut buff = Vec::<u8>::new();
+        loop {
+            buff.clear();
+            let read = reader.read_until(b'\n', &mut buff)? as u64;
+            if read <= 8 {
+                fd.set_len(off)?;
+                break;
+            }
+            off += read;
+
+            let i = u64::from_le_bytes(buff[0..8].try_into().unwrap());
+            bm.set(i as usize, true);
+        }
+
+        let tmp = bm.to_bytes();
+        let small = compress_gz(tmp.as_slice())?;
+
+        let file_tmp = dbdir.join("tmp.password.bm");
+        let mut fd = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .append(false)
+            .open(file_tmp.as_path())?;
+
+        fd.write_all(&off.to_le_bytes())?;
+        fd.write_all(small.as_slice())?;
+        fd.flush()?;
+        fd.sync_all()?;
+
+        fs::rename(file_tmp.as_path(), dbdir.join("password.bm"))?;
+
+        Ok(())
     }
 
     pub fn update_construct_columns<F>(dbdir: &Path, mut f: F) -> io::Result<()> where F: FnMut(u32) {

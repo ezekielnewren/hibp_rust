@@ -67,7 +67,7 @@ fn ingest(args: Args) {
 
         match db.find(&hp.hash) {
             Ok(i) => {
-                if ! db.password_bitset.contains(i) {
+                if ! db.password_bitset.get(i).unwrap_or(false) {
                     hp.password.push(b'\n');
                     db.submit(i, hp.password.as_slice()).unwrap();
                     new_password += 1;
@@ -104,6 +104,7 @@ fn update(args: Args) {
     };
 
     HIBPDB::update_download_missing(get_runtime(), dbdir.as_path(), status).unwrap();
+    HIBPDB::update_password_metadata(dbdir.as_path()).unwrap();
 }
 
 fn construct(args: Args) {

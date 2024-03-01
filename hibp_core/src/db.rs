@@ -95,7 +95,7 @@ impl<'a> HIBPDB<'a> {
         self.password_buff.extend_from_slice(&t);
         self.password_buff.extend_from_slice(password);
 
-        if self.password_buff.len() > 1000 {
+        if self.password_buff.len() > 10000000 {
             self.commit()?;
         }
 

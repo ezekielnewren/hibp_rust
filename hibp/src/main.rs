@@ -67,10 +67,9 @@ fn ingest(args: Args) {
 
         match db.find(&hp.hash) {
             Ok(i) => {
-                let pc = db.password_col.as_mut_slice();
-                if pc[i] == u64::MAX {
+                if ! db.password_bitset.contains(i) {
                     hp.password.push(b'\n');
-                    db.submit(i, hp.password.as_slice());
+                    db.submit(i, hp.password.as_slice()).unwrap();
                     new_password += 1;
                 }
 
@@ -79,9 +78,9 @@ fn ingest(args: Args) {
             Err(_) => miss += 1,
         }
 
-        if db.journal.entry.len() >= 100000 {
-            db.commit().unwrap();
-        }
+        // if db.journal.entry.len() >= 100000 {
+        //     db.commit().unwrap();
+        // }
 
         linecount += 1;
     }

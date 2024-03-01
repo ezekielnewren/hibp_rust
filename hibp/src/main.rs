@@ -67,7 +67,7 @@ fn ingest(args: Args) {
 
         match db.find(&hp.hash) {
             Ok(i) => {
-                if ! db.password_bitset.get(i).unwrap_or(false) {
+                if ! db.password_bitset.get(i as u64) {
                     hp.password.push(b'\n');
                     db.submit(i, hp.password.as_slice()).unwrap();
                     new_password += 1;

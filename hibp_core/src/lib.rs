@@ -429,3 +429,74 @@ impl<'a> IndexAndPasswordIterator<'a> {
         return off;
     }
 }
+
+pub struct BitSet {
+    pub array: Vec<u8>,
+}
+
+impl BitSet {
+
+    pub fn new() -> Self {
+        Self {
+            array: Vec::new(),
+        }
+    }
+
+    pub fn get(&self, i: u64) -> bool {
+        let (q, r) = divmod!(i as usize, 8);
+        if q >= self.array.len() {
+            return false;
+        }
+
+        (self.array[q]&(1<<r)) != 0
+    }
+
+    pub fn set(&mut self, i: u64) {
+        let (q, r) = divmod!(i as usize, 8);
+        if q >= self.array.len() {
+            self.array.resize(q+1, 0u8);
+        }
+
+        self.array[q] |= 1<<r;
+    }
+
+    pub fn clear(&mut self, i: u64) {
+        let (q, r) = divmod!(i as usize, 8);
+        if q >= self.array.len() {
+            return;
+        }
+
+        self.array[q] &= !(1<<r);
+    }
+
+    pub fn compact(&mut self) {
+        if self.array.len() == 0 {
+            return;
+        }
+
+        let mut i = self.array.len()-1;
+        while i>0 {
+            if self.array[i] != 0 {
+                break;
+            }
+
+            i -= 1;
+        }
+
+        self.array.resize(i+1, 0u8);
+    }
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+

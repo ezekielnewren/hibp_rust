@@ -1,10 +1,8 @@
 use std::{fs, io};
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, ErrorKind, Read, Seek, SeekFrom, Write};
-use std::mem::size_of;
 use std::path::{Path, PathBuf};
-use bit_vec::BitVec;
-use crate::{compress_gz, compress_xz, compute_offset, convert_range, download_range, extract_gz, extract_xz, HASH, HashRange, IndexAndPasswordIterator, max_bit_prefix};
+use crate::{BitSet, compress_xz, compute_offset, convert_range, download_range, extract_gz, extract_xz, HASH, HashRange, IndexAndPasswordIterator, max_bit_prefix};
 
 use futures::stream::{FuturesUnordered};
 use futures::StreamExt;
@@ -22,7 +20,7 @@ pub struct HIBPDB<'a> {
     pub frequency_col: FileArray<'a, u64>,
     pub frequency_idx: FileArray<'a, u64>,
     pub password: File,
-    pub password_bitset: bit_vec::BitVec,
+    pub password_bitset: BitSet,
     pub password_buff: Vec<u8>,
 }
 
@@ -53,7 +51,7 @@ impl<'a> HIBPDB<'a> {
             frequency_col: FileArray::open(frequency_col_file.as_path())?,
             frequency_idx: FileArray::open(frequency_idx_file.as_path())?,
             password,
-            password_bitset: BitVec::new(),
+            password_bitset: BitSet::new(),
             password_buff: vec![],
         };
 
@@ -66,20 +64,22 @@ impl<'a> HIBPDB<'a> {
         let password_bitset_file = self.dbdir.join("password.bm");
         self.password.seek(SeekFrom::Start(0))?;
         if password_bitset_file.exists() {
-            let mut buff = Vec::<u8>::new();
             let mut fd = File::open(password_bitset_file)?;
-            fd.read_to_end(&mut buff)?;
+            let mut bitset = BitSet::new();
+            bitset.array.resize(8, 0u8);
+            fd.read_exact(bitset.array.as_mut_slice())?;
+            let end = u64::from_le_bytes(bitset.array.as_slice().try_into().unwrap());
 
-            let end = u64::from_le_bytes(buff.as_slice()[0..8].try_into().unwrap());
-            let raw = extract_gz(&buff[8..])?;
-            self.password_bitset = BitVec::from_bytes(raw.as_slice());
+            bitset.array.clear();
+            fd.read_to_end(&mut bitset.array)?;
+            self.password_bitset = bitset;
 
             self.password.seek(SeekFrom::Start(end))?;
         };
         let off = self.password.stream_position()?;
         let mut it = IndexAndPasswordIterator::new(BufReader::new(&self.password));
         let read = it.for_each(|i, _| {
-            self.password_bitset.set(i as usize, true);
+            self.password_bitset.set(i);
         });
 
         self.password.set_len(off+read)?;
@@ -233,22 +233,16 @@ impl<'a> HIBPDB<'a> {
             .append(false)
             .open(password_file)?;
 
-        let db_len = fs::metadata(dbdir.join("hash.col"))?.len() as usize/size_of::<HASH>();
-
-        let mut bm = BitVec::new();
-        bm.grow(db_len, false);
+        let mut bm = BitSet::new();
 
         let off = fd.stream_position()?;
         let mut it = IndexAndPasswordIterator::new(BufReader::new(&fd));
         let read = it.for_each(|i, _| {
-            bm.set(i as usize, true);
+            bm.set(i);
         });
 
         let end = off+read;
         fd.set_len(end)?;
-
-        let tmp = bm.to_bytes();
-        let small = compress_gz(tmp.as_slice())?;
 
         let file_tmp = dbdir.join("tmp.password.bm");
         let mut fd = OpenOptions::new()
@@ -258,8 +252,10 @@ impl<'a> HIBPDB<'a> {
             .append(false)
             .open(file_tmp.as_path())?;
 
+        bm.compact();
+
         fd.write_all(&end.to_le_bytes())?;
-        fd.write_all(small.as_slice())?;
+        fd.write_all(bm.array.as_slice())?;
         fd.flush()?;
         fd.sync_all()?;
 

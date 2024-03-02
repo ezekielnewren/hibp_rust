@@ -469,6 +469,12 @@ impl BitSet {
         self.array[q] &= !(1<<r);
     }
 
+    pub fn count_ones(&self) -> u64 {
+        let mut sum = 0u64;
+        self.array.iter().for_each(|v| sum += v.count_ones() as u64);
+        return sum;
+    }
+
     pub fn compact(&mut self) {
         if self.array.len() == 0 {
             return;

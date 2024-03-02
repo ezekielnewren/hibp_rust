@@ -211,19 +211,33 @@ pub fn max_avg_variance(dbdir: PathBuf) {
 
 fn sandbox(args: &Args) {
     let dbdir = PathBuf::from(args.dbdirectory.clone());
+    let mut db = HIBPDB::open(dbdir.as_path()).unwrap();
 
-    let status = |range: u32| {
-        print!("{:05X}\r", range);
-        std::io::stdout().flush().unwrap();
-    };
+    // let status = |range: u32| {
+    //     print!("{:05X}\r", range);
+    //     std::io::stdout().flush().unwrap();
+    // };
     // println!("update_download_missing");
     // HIBPDB::update_download_missing(get_runtime(), dbdir.as_path(), status).unwrap();
     // println!("update_construct_columns");
     // HIBPDB::update_construct_columns(dbdir.as_path(), status).unwrap();
-    println!("update_hash_offset_and_password_col");
-    HIBPDB::update_hash_offset_and_password_col(dbdir.as_path()).unwrap();
+    // println!("update_hash_offset_and_password_col");
+    // HIBPDB::update_hash_offset_and_password_col(dbdir.as_path()).unwrap();
     // println!("update_frequency_index");
     // HIBPDB::update_frequency_index(dbdir.as_path()).unwrap();
+
+
+    let threshold = 1000000;
+    let mut checkpoint = 0;
+    let status = |off, len| {
+        if off-checkpoint >= threshold || off == len {
+            let percent = (off as f64 / len as f64)*100.0;
+            print!("{:.3}%\r", percent);
+            std::io::stdout().flush().unwrap();
+            checkpoint = off;
+        }
+    };
+    db.update_password_index(status).unwrap();
 
 }
 

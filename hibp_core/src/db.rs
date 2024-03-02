@@ -1,6 +1,7 @@
 use std::{fs, io};
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, ErrorKind, Read, Seek, SeekFrom, Write};
+use std::os::unix::fs::FileExt;
 use std::path::{Path, PathBuf};
 use crate::{BitSet, compress_xz, compute_offset, convert_range, download_range, extract_gz, extract_xz, HASH, HashRange, IndexAndPasswordIterator, max_bit_prefix};
 
@@ -125,6 +126,43 @@ impl<'a> HIBPDB<'a> {
         Ok(())
     }
 
+    pub fn update_password_index<F>(&mut self, mut f: F) -> io::Result<()>
+        where F: FnMut(u64, u64)
+    {
+        self.commit()?;
+
+        let tmp_file = self.dbdir.join("tmp.password.col");
+        let password_col_file = self.dbdir.join("password.col");
+        {
+            let mut password_col_fa = FileArrayMut::<u64>::open(tmp_file.as_path(), self.len())?;
+            let password_col = password_col_fa.as_mut_slice();
+
+            for i in 0..password_col.len() {
+                password_col[i] = u64::MAX;
+            }
+
+            let fsize = self.password.metadata()?.len();
+
+            // index zero is how much of the password file it describes
+            let mut off = 0;
+            self.password.seek(SeekFrom::Start(off))?;
+            let mut it = IndexAndPasswordIterator::new(BufReader::new(&self.password));
+            let _ = it.for_each(|i, password| {
+                f(off, fsize);
+                let len = 8+password.len();
+                password_col[i as usize] = off+8;
+                off += len as u64;
+            });
+
+            password_col_fa.sync()?;
+            f(off, fsize);
+        }
+
+        fs::rename(tmp_file, password_col_file)?;
+
+        Ok(())
+    }
+
     pub fn submit(&mut self, index: usize, password: &[u8]) -> io::Result<()> {
         let t = (index as u64).to_le_bytes();
         self.password_buff.extend_from_slice(&t);
@@ -138,6 +176,10 @@ impl<'a> HIBPDB<'a> {
     }
 
     pub fn commit(&mut self) -> io::Result<()> {
+        if self.password_buff.is_empty() {
+            return Ok(());
+        }
+
         self.password.write_all(self.password_buff.as_slice())?;
         self.password.flush()?;
         self.password.sync_all()?;

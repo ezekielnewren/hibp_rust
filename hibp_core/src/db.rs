@@ -63,7 +63,7 @@ impl<'a> HIBPDB<'a> {
     fn _init(&mut self) -> io::Result<()> {
         let end;
         (end, self.password_bitset) = self.load_bitset()?;
-        self.update_password_bitset(end)?;
+        self.update_password_and_bitset(end)?;
 
         Ok(())
     }
@@ -108,7 +108,7 @@ impl<'a> HIBPDB<'a> {
         Ok(())
     }
 
-    fn update_password_bitset(&mut self, off: u64) -> io::Result<()> {
+    fn update_password_and_bitset(&mut self, off: u64) -> io::Result<()> {
         self.password.seek(SeekFrom::Start(off))?;
         let mut it = IndexAndPasswordIterator::new(BufReader::new(&self.password));
         let read = it.for_each(|i, _| {

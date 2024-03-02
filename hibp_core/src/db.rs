@@ -114,11 +114,15 @@ impl<'a> HIBPDB<'a> {
         let read = it.for_each(|i, _| {
             self.password_bitset.set(i);
         });
-
         let end = off+read;
+
         self.password.set_len(end)?;
 
-        self.save_bitset(end)
+        if read > 0 {
+            self.save_bitset(end)?;
+        }
+
+        Ok(())
     }
 
     pub fn submit(&mut self, index: usize, password: &[u8]) -> io::Result<()> {

@@ -61,32 +61,64 @@ impl<'a> HIBPDB<'a> {
     }
 
     fn _init(&mut self) -> io::Result<()> {
+        let end;
+        (end, self.password_bitset) = self.load_bitset()?;
+        self.update_password_bitset(end)?;
+
+        Ok(())
+    }
+
+    fn load_bitset(&self) -> io::Result<(u64, BitSet)> {
+        let mut end = 0u64;
+        let mut bitset = BitSet::new();
+
         let password_bitset_file = self.dbdir.join("password.bm");
-        self.password.seek(SeekFrom::Start(0))?;
         if password_bitset_file.exists() {
             let mut fd = File::open(password_bitset_file)?;
-            let mut bitset = BitSet::new();
             bitset.array.resize(8, 0u8);
             fd.read_exact(bitset.array.as_mut_slice())?;
-            let end = u64::from_le_bytes(bitset.array.as_slice().try_into().unwrap());
+            end = u64::from_le_bytes(bitset.array.as_slice().try_into().unwrap());
 
             bitset.array.clear();
             fd.read_to_end(&mut bitset.array)?;
-            self.password_bitset = bitset;
-
-            self.password.seek(SeekFrom::Start(end))?;
         };
-        let off = self.password.stream_position()?;
+
+        let out = BitSet{array: bitset.array};
+        return Ok((end, out));
+    }
+    fn save_bitset(&mut self, end: u64) -> io::Result<()> {
+        self.password_bitset.compact();
+
+        let file_tmp = self.dbdir.join("tmp.password.bm");
+        let mut fd = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .append(false)
+            .open(file_tmp.as_path())?;
+
+
+        fd.write_all(&end.to_le_bytes())?;
+        fd.write_all(self.password_bitset.array.as_slice())?;
+        fd.flush()?;
+        fd.sync_all()?;
+
+        fs::rename(file_tmp.as_path(), self.dbdir.join("password.bm"))?;
+
+        Ok(())
+    }
+
+    fn update_password_bitset(&mut self, off: u64) -> io::Result<()> {
+        self.password.seek(SeekFrom::Start(off))?;
         let mut it = IndexAndPasswordIterator::new(BufReader::new(&self.password));
         let read = it.for_each(|i, _| {
             self.password_bitset.set(i);
         });
 
-        self.password.set_len(off+read)?;
+        let end = off+read;
+        self.password.set_len(end)?;
 
-        self.password.seek(SeekFrom::End(0))?;
-
-        Ok(())
+        self.save_bitset(end)
     }
 
     pub fn submit(&mut self, index: usize, password: &[u8]) -> io::Result<()> {
@@ -106,6 +138,9 @@ impl<'a> HIBPDB<'a> {
         self.password.flush()?;
         self.password.sync_all()?;
         self.password_buff.clear();
+
+        let end = self.password.stream_position()?;
+        self.save_bitset(end)?;
 
         Ok(())
     }

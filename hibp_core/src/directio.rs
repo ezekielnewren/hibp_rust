@@ -17,13 +17,14 @@ pub fn get_errno_message() -> String {
     }
 }
 
-pub struct Page {
+pub struct Page<'a> {
     ptr: *mut libc::c_void,
     timestamp: Instant,
     dirty: bool,
+    slice: &'a mut [u8],
 }
 
-impl Page {
+impl<'a> Page<'a> {
 
     pub fn new() -> io::Result<Self> {
         let mut mem_ptr: *mut libc::c_void = std::ptr::null_mut();
@@ -38,24 +39,22 @@ impl Page {
             ptr: mem_ptr,
             timestamp: Instant::now(),
             dirty: false,
+            slice: unsafe {
+                let ptr = mem_ptr as *mut u8;
+                std::slice::from_raw_parts_mut(ptr, Page::size() as usize)
+            }
         })
     }
 
     pub fn as_mut_slice(&mut self) -> &mut [u8] {
-        unsafe {
-            self.timestamp = Instant::now();
-            self.dirty = true;
-            let ptr = self.ptr as *mut u8;
-            std::slice::from_raw_parts_mut(ptr, Page::size() as usize)
-        }
+        self.dirty = true;
+        self.timestamp = Instant::now();
+        self.slice
     }
 
     pub fn as_slice(&mut self) -> &[u8] {
-        unsafe {
-            self.timestamp = Instant::now();
-            let ptr = self.ptr as *const u8;
-            std::slice::from_raw_parts(ptr, Page::size() as usize)
-        }
+        self.timestamp = Instant::now();
+        self.slice
     }
 
     pub fn zero(&mut self) {
@@ -68,7 +67,7 @@ impl Page {
 
 }
 
-impl Drop for Page {
+impl<'a> Drop for Page<'a> {
     fn drop(&mut self) {
         unsafe {
             libc::free(self.ptr);
@@ -76,14 +75,14 @@ impl Drop for Page {
     }
 }
 
-struct DirectIO {
+struct DirectIO<'a> {
     pathname: PathBuf,
     fd: RawFd,
-    inactive: Vec<Page>,
-    active: HashMap<usize, Page>,
+    inactive: Vec<Page<'a>>,
+    active: HashMap<usize, Page<'a>>,
 }
 
-impl Drop for DirectIO {
+impl<'a> Drop for DirectIO<'a> {
     fn drop(&mut self) {
         unsafe {
             let mut err_list = Vec::<io::Result<()>>::new();
@@ -107,7 +106,7 @@ impl Drop for DirectIO {
     }
 }
 
-impl DirectIO {
+impl<'a> DirectIO<'a> {
 
     pub fn open(pathname: &Path) -> io::Result<Self> {
         let path = CString::new(pathname.as_os_str().to_str().unwrap()).unwrap();

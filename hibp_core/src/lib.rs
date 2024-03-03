@@ -3,13 +3,14 @@ pub mod transform;
 pub mod minbitrep;
 pub mod indexbycopy;
 pub mod file_array;
+mod directio;
 
 use std::fmt::{Debug, Formatter};
 use std::mem::{size_of};
 use std::{io, slice};
 use std::fs::File;
 use std::io::{BufRead, BufReader, ErrorKind, Read, Write};
-use std::ops::Deref;
+use std::ops::{Deref, Range, RangeTo};
 use std::str::Utf8Error;
 use std::sync::Arc;
 use chrono::DateTime;
@@ -467,6 +468,15 @@ impl BitSet {
         }
 
         self.array[q] &= !(1<<r);
+    }
+
+    pub fn first_zero(&self, range: Range<u64>) -> Result<u64, u64> {
+        for i in range.start..range.end {
+            if !self.get(i) {
+                return Ok(i);
+            }
+        }
+        Err(range.end)
     }
 
     pub fn count_ones(&self) -> u64 {

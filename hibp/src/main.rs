@@ -1,5 +1,5 @@
 use std::io;
-use std::io::{BufReader, BufWriter, prelude::*};
+use std::io::{BufReader, BufWriter, prelude::*, SeekFrom};
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -18,6 +18,9 @@ struct Args {
 
     #[arg(long)]
     left: bool,
+
+    #[arg(long)]
+    list: bool,
 
     #[arg(short, long)]
     ingest: bool,
@@ -128,6 +131,21 @@ fn left(args: Args) {
     writer.flush().unwrap();
 }
 
+fn list(args: Args) {
+    let dbdir = PathBuf::from(args.dbdirectory.clone());
+    let mut db = HIBPDB::open(dbdir.as_path()).unwrap();
+
+    let lock = io::stdout().lock();
+    let mut writer = BufWriter::new(lock);
+
+    db.password.seek(SeekFrom::Start(0)).unwrap();
+    let mut it = IndexAndPasswordIterator::new(BufReader::new(&db.password));
+    it.for_each(|_, password| {
+        write!(writer, "{}", std::str::from_utf8(password).unwrap()).unwrap();
+    });
+    writer.flush().unwrap();
+}
+
 fn construct(args: Args) {
     let dbdir = PathBuf::from(args.dbdirectory);
 
@@ -149,6 +167,8 @@ fn main() {
         construct(args);
     } else if args.left {
         left(args);
+    } else if args.list {
+        list(args);
     }
 }
 

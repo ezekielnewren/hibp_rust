@@ -399,7 +399,7 @@ impl<'a> IndexAndPasswordIterator<'a> {
 }
 
 impl<'a> IndexAndPasswordIterator<'a> {
-    fn for_each<F>(&mut self, mut f: F) -> u64
+    pub fn for_each<F>(&mut self, mut f: F) -> u64
         where F: FnMut(u64, &[u8])
     {
         let mut off = 0;

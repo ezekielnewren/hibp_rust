@@ -134,16 +134,12 @@ impl<'a> HIBPDB<'a> {
         let tmp_file = self.dbdir.join("tmp.password.col");
         let password_col_file = self.dbdir.join("password.col");
         {
-            let mut password_col_fa = FileArrayMut::<u64>::open(tmp_file.as_path(), self.len())?;
-            let password_col = password_col_fa.as_mut_slice();
-
-            for i in 0..password_col.len() {
-                password_col[i] = u64::MAX;
-            }
+            let mut password_col_vec = Vec::<u64>::new();
+            password_col_vec.resize(self.len(), u64::MAX);
+            let password_col = password_col_vec.as_mut_slice();
 
             let fsize = self.password.metadata()?.len();
 
-            // index zero is how much of the password file it describes
             let mut off = 0;
             self.password.seek(SeekFrom::Start(off))?;
             let mut it = IndexAndPasswordIterator::new(BufReader::new(&self.password));
@@ -154,11 +150,19 @@ impl<'a> HIBPDB<'a> {
                 off += len as u64;
             });
 
-            password_col_fa.sync()?;
+            let mut fd = OpenOptions::new().create(true).write(true).truncate(true).append(false).open(tmp_file.as_path())?;
+            let mut buff: &mut [u8] = unsafe {
+                let ptr = password_col.as_mut_ptr() as *mut u8;
+                std::slice::from_raw_parts_mut(ptr, password_col.len()*8)
+            };
+            fd.write_all_at(&mut buff, 0)?;
+            fd.flush()?;
+            fd.sync_all()?;
+
             f(off, fsize);
         }
 
-        fs::rename(tmp_file, password_col_file)?;
+        fs::rename(tmp_file.as_path(), password_col_file)?;
 
         Ok(())
     }

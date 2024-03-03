@@ -1,5 +1,5 @@
 use std::io;
-use std::io::{BufReader, prelude::*};
+use std::io::{BufReader, BufWriter, prelude::*};
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -15,6 +15,9 @@ struct Args {
 
     #[arg(short, long)]
     update: bool,
+
+    #[arg(long)]
+    left: bool,
 
     #[arg(short, long)]
     ingest: bool,
@@ -103,6 +106,28 @@ fn update(args: Args) {
     HIBPDB::update_password_metadata(dbdir.as_path()).unwrap();
 }
 
+fn left(args: Args) {
+    let dbdir = PathBuf::from(args.dbdirectory.clone());
+    let db = HIBPDB::open(dbdir.as_path()).unwrap();
+
+    let lock = io::stdout().lock();
+    let mut writer = BufWriter::new(lock);
+
+    let mut dump = [0u8; 32];
+    for i in 0..db.len() {
+        let row = db.frequency_idx.as_slice()[i] as usize;
+        if db.password_bitset.get(row as u64) {
+            continue;
+        }
+        let h = &db.hash()[row];
+        hex::encode_to_slice(h, &mut dump).unwrap();
+        let f = db.frequency_col.as_slice()[row];
+
+        writeln!(writer, "{}:{}", std::str::from_utf8(&dump).unwrap(), f).unwrap();
+    }
+    writer.flush().unwrap();
+}
+
 fn construct(args: Args) {
     let dbdir = PathBuf::from(args.dbdirectory);
 
@@ -122,6 +147,8 @@ fn main() {
         update(args);
     } else if args.construct {
         construct(args);
+    } else if args.left {
+        left(args);
     }
 }
 

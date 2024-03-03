@@ -209,9 +209,9 @@ pub fn max_avg_variance(dbdir: PathBuf) {
 }
 
 
-fn sandbox(args: &Args) {
-    let dbdir = PathBuf::from(args.dbdirectory.clone());
-    let mut db = HIBPDB::open(dbdir.as_path()).unwrap();
+fn sandbox(_: &Args) {
+    // let dbdir = PathBuf::from(args.dbdirectory.clone());
+    // let mut db = HIBPDB::open(dbdir.as_path()).unwrap();
 
     // let status = |range: u32| {
     //     print!("{:05X}\r", range);
@@ -227,17 +227,17 @@ fn sandbox(args: &Args) {
     // HIBPDB::update_frequency_index(dbdir.as_path()).unwrap();
 
 
-    let threshold = 1000000;
-    let mut checkpoint = 0;
-    let status = |off, len| {
-        if off-checkpoint >= threshold || off == len {
-            let percent = (off as f64 / len as f64)*100.0;
-            print!("{:.3}%\r", percent);
-            std::io::stdout().flush().unwrap();
-            checkpoint = off;
-        }
-    };
-    db.update_password_index(status).unwrap();
+    // let threshold = 1000000;
+    // let mut checkpoint = 0;
+    // let status = |off, len| {
+    //     if off-checkpoint >= threshold || off == len {
+    //         let percent = (off as f64 / len as f64)*100.0;
+    //         print!("{:.3}%\r", percent);
+    //         std::io::stdout().flush().unwrap();
+    //         checkpoint = off;
+    //     }
+    // };
+    // db.update_password_index(status).unwrap();
 
 }
 

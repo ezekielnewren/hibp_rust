@@ -580,6 +580,7 @@ name = "hibp_benchmark"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "hex",
  "hibp_core",
  "md4",
  "rand",

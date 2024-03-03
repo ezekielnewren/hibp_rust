@@ -12,3 +12,4 @@ thousands = "0.2.0"
 rand = "0.8.5"
 clap = { version = "4.4.11", features = ["derive"] }
 rayon = "1.8.1"
+hex = "0.4.3"

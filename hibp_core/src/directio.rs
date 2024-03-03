@@ -43,14 +43,13 @@ impl MemoryPressure {
 
 }
 
-pub struct Page<'a> {
+pub struct Page {
     ptr: *mut libc::c_void,
     timestamp: Instant,
     dirty: bool,
-    slice: &'a mut [u8],
 }
 
-impl<'a> Page<'a> {
+impl Page {
 
     pub fn new() -> io::Result<Self> {
         let mut mem_ptr: *mut libc::c_void = std::ptr::null_mut();
@@ -65,22 +64,18 @@ impl<'a> Page<'a> {
             ptr: mem_ptr,
             timestamp: Instant::now(),
             dirty: false,
-            slice: unsafe {
-                let ptr = mem_ptr as *mut u8;
-                std::slice::from_raw_parts_mut(ptr, Page::size() as usize)
-            }
         })
     }
 
     pub fn as_mut_slice(&mut self) -> &mut [u8] {
         self.dirty = true;
         self.timestamp = Instant::now();
-        self.slice
+        unsafe { std::slice::from_raw_parts_mut(self.ptr as *mut u8, Page::size() as usize) }
     }
 
     pub fn as_slice(&mut self) -> &[u8] {
         self.timestamp = Instant::now();
-        self.slice
+        unsafe { std::slice::from_raw_parts(self.ptr as *const u8, Page::size() as usize) }
     }
 
     pub fn zero(&mut self) {
@@ -93,7 +88,7 @@ impl<'a> Page<'a> {
 
 }
 
-impl<'a> Drop for Page<'a> {
+impl Drop for Page {
     fn drop(&mut self) {
         unsafe {
             libc::free(self.ptr);
@@ -101,14 +96,14 @@ impl<'a> Drop for Page<'a> {
     }
 }
 
-struct DirectIO<'a> {
+struct DirectIO {
     pathname: PathBuf,
     fd: RawFd,
-    inactive: Vec<Page<'a>>,
-    active: HashMap<usize, Page<'a>>,
+    inactive: Vec<Page>,
+    active: HashMap<usize, Page>,
 }
 
-impl<'a> Drop for DirectIO<'a> {
+impl Drop for DirectIO {
     fn drop(&mut self) {
         unsafe {
             let mut err_list = Vec::<io::Result<()>>::new();
@@ -132,7 +127,7 @@ impl<'a> Drop for DirectIO<'a> {
     }
 }
 
-impl<'a> DirectIO<'a> {
+impl DirectIO {
 
     pub fn open(pathname: &Path) -> io::Result<Self> {
         let path = CString::new(pathname.as_os_str().to_str().unwrap()).unwrap();

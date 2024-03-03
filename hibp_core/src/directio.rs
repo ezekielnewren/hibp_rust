@@ -6,7 +6,7 @@ use std::io::{Error, ErrorKind};
 use std::os::fd::RawFd;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use crate::BitSet;
+use sysinfo::{MemoryRefreshKind, RefreshKind, System};
 
 
 pub fn get_errno_message() -> String {
@@ -15,6 +15,32 @@ pub fn get_errno_message() -> String {
         let ptr = libc::strerror(errno);
         return String::from(CStr::from_ptr(ptr).to_str().unwrap());
     }
+}
+
+#[derive(PartialEq, PartialOrd)]
+enum MemoryPressure {
+    Minimal,
+    Moderate,
+    Extreme,
+}
+
+impl MemoryPressure {
+    fn current() -> MemoryPressure {
+        let rk = RefreshKind::new()
+            .with_memory(MemoryRefreshKind::new().without_swap());
+        let mut sys = System::new_with_specifics(rk);
+        sys.refresh_all();
+        let percent = (sys.used_memory()*100) as f64 / sys.total_memory() as f64;
+
+        return if percent >= 95.0 {
+            Self::Extreme
+        } else if percent >= 80.0 {
+            Self::Moderate
+        } else {
+            Self::Minimal
+        }
+    }
+
 }
 
 pub struct Page<'a> {
@@ -165,11 +191,88 @@ impl<'a> DirectIO<'a> {
         }
     }
 
-    pub fn resize(&mut self, new_size: u64) -> io::Result<()> {
-        unsafe {
-            let r = libc::ftruncate64(self.fd, (Page::size()*new_size) as libc::off64_t);
-            if r < 0 {
-                return Err(Error::new(ErrorKind::Other, get_errno_message()));
+    fn _get_page(&mut self) -> io::Result<Page> {
+        use MemoryPressure::*;
+
+        if self.inactive.is_empty() {
+            self._reclaim_pages(MemoryPressure::current())?;
+            let pressure = MemoryPressure::current();
+            if pressure > Minimal {
+                self.free_memory(pressure)?;
+            }
+        }
+
+        return Ok(self.inactive.pop().unwrap());
+    }
+
+    pub fn free_memory(&mut self, pressure: MemoryPressure) -> io::Result<()> {
+        use MemoryPressure::*;
+
+        self._reclaim_pages(pressure)?;
+        if self.inactive.len() > 1 {
+            self.inactive.truncate(1);
+        }
+
+        Ok(())
+    }
+
+    fn _reclaim_pages(&mut self, mut pressure: MemoryPressure) -> io::Result<()> {
+        use MemoryPressure::*;
+
+        if !self.inactive.is_empty() && pressure == Minimal {
+            return Ok(())
+        }
+        let mut oldest = Instant::now();
+        let mut victim = usize::MAX;
+
+        for page_id in self.active.keys() {
+            if !self.active[page_id].dirty {
+                victim = *page_id;
+                break;
+            } else {
+                let t = self.active[page_id].timestamp;
+                if t < oldest {
+                    oldest = t;
+                    victim = *page_id;
+                }
+            }
+        }
+
+        let mut page: Page;
+        if victim == usize::MAX {
+            page = Page::new().unwrap();
+        } else {
+            page = self.active.remove(&victim).unwrap();
+            if page.dirty {
+                self._write_page(victim, &mut page)?;
+            }
+        };
+
+        self.inactive.push(page);
+
+        if pressure >= Moderate {
+            let mut clean = Vec::new();
+            let mut dirty = Vec::new();
+
+            for page_id in self.active.keys() {
+                if !self.active[page_id].dirty {
+                    clean.push(*page_id);
+                } else {
+                    dirty.push(*page_id);
+                }
+            }
+
+            for page_id in clean {
+                let page = self.active.remove(&page_id).unwrap();
+                self.inactive.push(page);
+            }
+
+            if pressure == Extreme {
+                for page_id in dirty {
+                    let mut page = self.active.remove(&page_id).unwrap();
+                    self._write_page(page_id, &mut page)?;
+                    self.inactive.push(page);
+                }
             }
         }
 
@@ -177,40 +280,20 @@ impl<'a> DirectIO<'a> {
     }
 
     fn _page_fault(&mut self, page_id: usize) -> io::Result<()> {
-        // allocate more memory if possible
-        if self.inactive.is_empty() {
-            self.inactive.push(Page::new()?);
-        }
-        // if we can't allocate more memory then reclaim clean pages
-        let keys: Vec<usize> = self.active.keys().map(|k: &usize| return *k).collect();
-        if self.inactive.is_empty() {
-            for k in keys.iter() {
-                if !self.active[&k].dirty {
-                    let t = self.active.remove(&k).unwrap();
-                    self.inactive.push(t);
-                    break;
-                }
+        let mut page = self._get_page()?;
+        self._read_page(page_id, &mut page)?;
+        self.active.insert(page_id, page);
+
+        Ok(())
+    }
+
+    pub fn resize(&mut self, new_size: u64) -> io::Result<()> {
+        unsafe {
+            let r = libc::ftruncate64(self.fd, (Page::size()*new_size) as libc::off64_t);
+            if r < 0 {
+                return Err(Error::new(ErrorKind::Other, get_errno_message()));
             }
         }
-        if self.inactive.is_empty() {
-            let mut victim = keys[0];
-            let mut oldest = self.active[&victim].timestamp;
-
-            for k in &keys[1..] {
-                if self.active[&k].timestamp < oldest {
-                    oldest = self.active[&k].timestamp;
-                    victim = *k;
-                }
-            }
-
-            let mut p: Page = self.active.remove(&victim).unwrap();
-            self._write_page(victim, &mut p)?;
-            self.inactive.push(p);
-        }
-
-        let mut p = self.inactive.remove(self.inactive.len()-1);
-        self._read_page(page_id, &mut p)?;
-        self.active.insert(page_id, p);
 
         Ok(())
     }

@@ -1,8 +1,12 @@
 use std::{fs, io};
 use std::fs::File;
+use std::marker::PhantomData;
 use std::mem::size_of;
 use std::path::{Path, PathBuf};
 use memmap2::{Mmap, MmapMut, MmapOptions};
+use crate::directio::{DirectIO, Page};
+use crate::divmod;
+use crate::indexbycopy::IndexByCopy;
 
 pub struct FileArrayMut<'a, T> {
     pub pathname: PathBuf,
@@ -96,3 +100,46 @@ impl<'a, T> FileArray<'a, T> {
     }
 
 }
+
+
+pub struct DirectIOArray<T: Copy> {
+    dio: DirectIO,
+    elements_per_block: usize,
+    phantom: PhantomData<T>,
+}
+
+impl<T: Copy> DirectIOArray<T> {
+
+    pub fn open(pathname: &Path) -> io::Result<Self> {
+        Ok(Self {
+            dio: DirectIO::open(pathname)?,
+            elements_per_block: Page::size() as usize/size_of::<T>(),
+            phantom: PhantomData::default(),
+        })
+    }
+
+}
+
+impl<T: Copy> IndexByCopy<T> for DirectIOArray<T> {
+    fn get(&mut self, index: usize) -> T {
+        let (q, r) = divmod!(index, Page::size() as usize/size_of::<T>());
+        if q >= self.dio.len().unwrap() {
+            panic!("index out of bounds");
+        }
+
+        let slice = self.dio.at(q).unwrap();
+        let ptr = slice.as_ptr() as *const T;
+        unsafe {
+            return *ptr.add(r);
+        }
+    }
+
+    fn len(&mut self) -> usize {
+        self.dio.len().unwrap()*self.elements_per_block
+    }
+}
+
+
+
+
+

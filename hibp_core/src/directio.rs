@@ -96,7 +96,7 @@ impl Drop for Page {
     }
 }
 
-struct DirectIO {
+pub struct DirectIO {
     pathname: PathBuf,
     fd: RawFd,
     inactive: Vec<Page>,
@@ -298,9 +298,8 @@ impl DirectIO {
             self._page_fault(page_id)?;
         }
 
-
-        let p = self.active.get_mut(&page_id).unwrap();
-        Ok(p.as_mut_slice())
+        let page = self.active.get_mut(&page_id).unwrap();
+        Ok(page.as_mut_slice())
     }
 
     pub fn at(&mut self, page_id: usize) -> io::Result<&[u8]> {
@@ -308,8 +307,8 @@ impl DirectIO {
             self._page_fault(page_id)?;
         }
 
-        let p = self.active.get_mut(&page_id).unwrap();
-        Ok(p.as_slice())
+        let page = self.active.get_mut(&page_id).unwrap();
+        Ok(page.as_slice())
     }
 
     pub fn sync(&mut self) -> io::Result<()> {
@@ -332,6 +331,19 @@ impl DirectIO {
 
         Ok(())
     }
+
+    pub fn len(&self) -> io::Result<usize> {
+        unsafe {
+            let mut stat64: libc::stat64 = std::mem::zeroed();
+            let r = libc::fstat64(self.fd, &mut stat64);
+            if r < 0 {
+                return Err(Error::new(ErrorKind::Other, get_errno_message()));
+            }
+            let fsize = stat64.st_size as usize;
+            Ok(fsize/Page::size() as usize)
+        }
+    }
+
 }
 
 

@@ -3,8 +3,6 @@ pub mod transform;
 pub mod minbitrep;
 pub mod indexbycopy;
 pub mod file_array;
-mod directio;
-
 use std::fmt::{Debug, Formatter};
 use std::mem::{size_of};
 use std::{io, slice};
@@ -504,8 +502,21 @@ impl BitSet {
 
 }
 
+pub fn is_power_of_2(x: u64) -> bool {
+    (x & (x - 1)) == 0
+}
 
-
+pub fn round_up_to_next_power_of_2(mut v: u64) -> u64 {
+    v -= 1;
+    v |= v >> 1;
+    v |= v >> 2;
+    v |= v >> 4;
+    v |= v >> 8;
+    v |= v >> 16;
+    v |= v >> 32;
+    v += 1;
+    v
+}
 
 
 

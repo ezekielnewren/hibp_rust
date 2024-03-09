@@ -134,9 +134,11 @@ impl<'a> HIBPDB<'a> {
         let tmp_file = self.dbdir.join("tmp.password.col");
         let password_col_file = self.dbdir.join("password.col");
         {
-            let mut password_col_vec = Vec::<u64>::new();
-            password_col_vec.resize(self.len(), u64::MAX);
-            let password_col = password_col_vec.as_mut_slice();
+            // let mut password_col_vec = Vec::<u64>::new();
+            // password_col_vec.resize(self.len(), u64::MAX);
+            let mut password_col_fa = FileArrayMut::open(tmp_file.as_path(), self.len())?;
+            let password_col = password_col_fa.as_mut_slice();
+            password_col.fill(u64::MAX);
 
             let fsize = self.password.metadata()?.len();
 

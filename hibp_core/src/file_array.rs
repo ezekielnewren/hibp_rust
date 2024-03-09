@@ -1,11 +1,12 @@
-use std::{fs, io};
+use std::{fs, io, slice};
 use std::fs::File;
 use std::marker::PhantomData;
 use std::mem::size_of;
 use std::path::{Path, PathBuf};
 use memmap2::{Mmap, MmapMut, MmapOptions};
 use crate::divmod;
-use crate::indexbycopy::IndexByCopy;
+use crate::indexbycopy::{IndexByCopy, IndexByCopyMut};
+use crate::userfilecache::UserFileCache;
 
 pub struct FileArrayMut<'a, T> {
     pub pathname: PathBuf,
@@ -101,6 +102,59 @@ impl<'a, T> FileArray<'a, T> {
 }
 
 
+
+pub struct UserFileCacheArray<T> {
+    cache: UserFileCache,
+    elements_per_page: usize,
+    phantom: PhantomData<T>,
+}
+
+impl<T: Copy> UserFileCacheArray<T> {
+
+    pub fn from(cache: UserFileCache) -> Self {
+        if UserFileCache::PAGESIZE%size_of::<T>() != 0 {
+            panic!("page size must be divisible by the generic type size");
+        }
+
+        Self {
+            cache,
+            elements_per_page: UserFileCache::PAGESIZE/size_of::<T>(),
+            phantom: PhantomData::default(),
+        }
+    }
+}
+
+impl<T: Copy> IndexByCopy<T> for UserFileCacheArray<T> {
+    fn get(&mut self, index: usize) -> T {
+        let (q, r) = divmod!(self.elements_per_page, index);
+
+        let slice: &[T];
+        unsafe {
+            let t = self.cache.at(q);
+            slice = slice::from_raw_parts(t.as_ptr() as *const T, t.len()/size_of::<T>());
+        }
+
+        return slice[r];
+    }
+
+    fn len(&mut self) -> usize {
+        self.cache.file_size()/size_of::<T>()
+    }
+}
+
+impl<T: Copy> IndexByCopyMut<T> for UserFileCacheArray<T> {
+    fn set(&mut self, index: usize, value: T) {
+        let (q, r) = divmod!(self.elements_per_page, index);
+
+        let slice: &mut [T];
+        unsafe {
+            let t = self.cache.at_mut(q);
+            slice = slice::from_raw_parts_mut(t.as_ptr() as *mut T, t.len()/size_of::<T>());
+        }
+
+        slice[r] = value;
+    }
+}
 
 
 

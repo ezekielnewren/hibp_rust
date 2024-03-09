@@ -3,12 +3,14 @@ pub mod transform;
 pub mod minbitrep;
 pub mod indexbycopy;
 pub mod file_array;
+mod userfilecache;
+
 use std::fmt::{Debug, Formatter};
 use std::mem::{size_of};
 use std::{io, slice};
 use std::fs::File;
 use std::io::{BufRead, BufReader, ErrorKind, Read, Write};
-use std::ops::{Deref, Range, RangeTo};
+use std::ops::{Deref, Range};
 use std::str::Utf8Error;
 use std::sync::Arc;
 use chrono::DateTime;

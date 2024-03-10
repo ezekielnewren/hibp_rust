@@ -82,6 +82,14 @@ pub struct UserFileCache {
     active: Vec<Option<Segment>>,
 }
 
+impl Drop for UserFileCache {
+    fn drop(&mut self) {
+        unsafe {
+            libc::close(self.fd);
+        }
+    }
+}
+
 impl UserFileCache {
     pub fn page_size() -> usize {
         return unsafe { libc::sysconf(libc::_SC_PAGESIZE) } as usize;

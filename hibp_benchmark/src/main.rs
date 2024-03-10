@@ -12,7 +12,7 @@ use hibp_core::db::HIBPDB;
 use rayon::prelude::*;
 use hibp_core::file_array::UserFileCacheArray;
 use hibp_core::indexbycopy::{IndexByCopy, IndexByCopyMut};
-use hibp_core::userfilecache::UserFileCache;
+use hibp_core::userfilecache::{Segment, UserFileCache};
 
 pub fn timeit<F>(min_runtime: Duration, mut inner: F) -> u64
     where F: FnMut(),
@@ -245,6 +245,9 @@ fn sandbox(args: &Args) {
     let rows = 931856448;
     let pages = roundup_divide!(rows*8, UserFileCache::page_size());
 
+    // let seg = Segment::new(1<<21).unwrap();
+    // drop(seg);
+
     // let mut x = Vec::<u8>::new();
     // x.resize(pages*UserFileCache::page_size(), u8::MAX);
 
@@ -253,14 +256,11 @@ fn sandbox(args: &Args) {
     let mut fa = UserFileCacheArray::<u64>::from(ufc);
 
     fa.cache.preload();
-    for i in 0..fa.len() {
-        fa.set(i, u64::MAX);
+    for i in 0..fa.cache.len() {
+        let page = fa.cache.at_mut(i);
+        page.fill(u8::MAX);
     }
-    // for i in 0..ufc.len() {
-    //     let page = ufc.at_mut(i);
-    //     page.fill(u8::MAX);
-    // }
-    // ufc.sync().unwrap();
+    // fa.cache.sync().unwrap();
 
 }
 

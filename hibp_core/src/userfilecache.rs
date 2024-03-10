@@ -73,6 +73,7 @@ impl Drop for Segment {
 
 pub struct UserFileCache {
     fd: RawFd,
+    page_size: usize,
     pages: usize,
     pages_per_segment: usize,
     segment_len: usize,
@@ -119,6 +120,7 @@ impl UserFileCache {
 
         let mut it = Self {
             fd,
+            page_size: Self::page_size(),
             pages: number_of_pages,
             pages_per_segment: 0,
             segment_len: 1<<21,
@@ -179,7 +181,8 @@ impl UserFileCache {
         }
 
         let seg = self.active[q].as_mut().unwrap();
-        let slice = &mut seg.as_mut_slice()[r*Self::page_size()..(r+1)*Self::page_size()];
+        let off = r*self.page_size;
+        let slice = &mut seg.as_mut_slice()[off..off+self.page_size];
         return slice;
     }
 
@@ -203,8 +206,9 @@ impl UserFileCache {
     }
 
     pub fn sync(&mut self) -> io::Result<()> {
+        let ps = self.page_size;
         for i in 0..self.len() {
-            Self::_write(self.fd, self.at(i), i*Self::page_size())?;
+            Self::_write(self.fd, self.at(i), i*ps)?;
         }
         Ok(())
     }
@@ -214,7 +218,7 @@ impl UserFileCache {
     }
 
     pub fn file_size(&self) -> usize {
-        self.pages*Self::page_size()
+        self.pages*self.page_size
     }
 
 }

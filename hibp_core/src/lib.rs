@@ -3,7 +3,7 @@ pub mod transform;
 pub mod minbitrep;
 pub mod indexbycopy;
 pub mod file_array;
-mod userfilecache;
+pub mod userfilecache;
 
 use std::fmt::{Debug, Formatter};
 use std::mem::{size_of};
@@ -33,6 +33,13 @@ macro_rules! divmod {
     ($dividend:expr, $divisor:expr) => {
         (($dividend / $divisor), ($dividend % $divisor))
     };
+}
+
+#[macro_export]
+macro_rules! roundup_divide {
+    ($divd:expr, $div:expr) => {
+        ($divd+$div-1)/$div
+    }
 }
 
 #[allow(non_snake_case)]

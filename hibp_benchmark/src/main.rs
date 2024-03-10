@@ -10,6 +10,9 @@ use thousands::Separable;
 use clap::Parser;
 use hibp_core::db::HIBPDB;
 use rayon::prelude::*;
+use hibp_core::file_array::UserFileCacheArray;
+use hibp_core::indexbycopy::{IndexByCopy, IndexByCopyMut};
+use hibp_core::userfilecache::UserFileCache;
 
 pub fn timeit<F>(min_runtime: Duration, mut inner: F) -> u64
     where F: FnMut(),
@@ -227,17 +230,37 @@ fn sandbox(args: &Args) {
     // HIBPDB::update_frequency_index(dbdir.as_path()).unwrap();
 
 
-    let threshold = 1000000;
-    let mut checkpoint = 0;
-    let status = |off, len| {
-        if off-checkpoint >= threshold || off == len {
-            let percent = (off as f64 / len as f64)*100.0;
-            print!("{:.3}%\r", percent);
-            std::io::stdout().flush().unwrap();
-            checkpoint = off;
-        }
-    };
-    db.update_password_index(status).unwrap();
+    // let threshold = 1000000;
+    // let mut checkpoint = 0;
+    // let status = |off, len| {
+    //     if off-checkpoint >= threshold || off == len {
+    //         let percent = (off as f64 / len as f64)*100.0;
+    //         print!("{:.3}%\r", percent);
+    //         std::io::stdout().flush().unwrap();
+    //         checkpoint = off;
+    //     }
+    // };
+    // db.update_password_index(status).unwrap();
+
+    let rows = 931856448;
+    let pages = roundup_divide!(rows*8, UserFileCache::page_size());
+
+    // let mut x = Vec::<u8>::new();
+    // x.resize(pages*UserFileCache::page_size(), u8::MAX);
+
+    let pathname = PathBuf::from("/tmp/dump.bin");
+    let mut ufc = UserFileCache::open(pathname.as_path(), pages).unwrap();
+    let mut fa = UserFileCacheArray::<u64>::from(ufc);
+
+    fa.cache.preload();
+    for i in 0..fa.len() {
+        fa.set(i, u64::MAX);
+    }
+    // for i in 0..ufc.len() {
+    //     let page = ufc.at_mut(i);
+    //     page.fill(u8::MAX);
+    // }
+    // ufc.sync().unwrap();
 
 }
 

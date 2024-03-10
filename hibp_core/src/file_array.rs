@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 use std::mem::size_of;
 use std::path::{Path, PathBuf};
 use memmap2::{Mmap, MmapMut, MmapOptions};
-use crate::divmod;
+use crate::{divmod, roundup_divide};
 use crate::indexbycopy::{IndexByCopy, IndexByCopyMut};
 use crate::userfilecache::UserFileCache;
 
@@ -113,7 +113,7 @@ impl<T: Copy> UserFileCacheArray<T> {
 
 
     pub fn open(pathname: &Path, elements: usize) -> io::Result<Self> {
-        let number_of_pages = (elements*size_of::<T>()+UserFileCache::page_size()-1)/UserFileCache::page_size();
+        let number_of_pages = roundup_divide!(elements*size_of::<T>(), UserFileCache::page_size());
         let cache = UserFileCache::open(pathname, number_of_pages)?;
         Ok(Self::from(cache))
     }

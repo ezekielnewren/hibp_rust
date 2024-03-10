@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::io::{Write};
+use std::io::{BufRead, BufReader, Seek, SeekFrom, Write};
 use std::path::PathBuf;
 use hibp_core::*;
 
@@ -230,9 +230,9 @@ fn sandbox(args: &Args) {
     // HIBPDB::update_frequency_index(dbdir.as_path()).unwrap();
 
 
-    let threshold = 1000000;
+    let threshold = 100000;
     let mut checkpoint = 0;
-    let status = |off, len| {
+    let mut status = |off, len| {
         if off-checkpoint >= threshold || off == len {
             let percent = (off as f64 / len as f64)*100.0;
             print!("{:.3}%\r", percent);
@@ -240,36 +240,29 @@ fn sandbox(args: &Args) {
             checkpoint = off;
         }
     };
-    db.update_password_index(status).unwrap();
+    // db.update_password_index(status).unwrap();
 
-    // let rows = 931856448;
-    // let pages = roundup_divide!(rows*8, UserFileCache::page_size());
+    let len = db.len();
+    let hash_col = db.hash();
 
-    // let seg = Segment::new(1<<21).unwrap();
-    // drop(seg);
+    let mut hap = HashAndPassword {
+        hash: [0u8; 16],
+        password: vec![],
+    };
 
-    // let mut x = Vec::<u8>::new();
-    // x.resize(pages*UserFileCache::page_size(), u8::MAX);
-    //
-    // let pathname = PathBuf::from("/tmp/dump.bin");
-    // let mut ufc = UserFileCache::open(pathname.as_path(), pages).unwrap();
-    // let mut fa = UserFileCacheArray::<u64>::from(ufc);
-    //
-    // fa.cache.preload();
-    // for i in 0..fa.len() {
-    //     fa.set(i, u64::MAX);
-    // }
-    // for i in 0..fa.cache.len() {
-    //     let page = fa.cache.at_mut(i);
-    //     page.fill(u8::MAX);
-    // }
-    // for i in 12..14 {
-    //     fa.cache.at_mut(i);
-    // }
-    // for i in 510..520 {
-    //     fa.cache.at_mut(i);
-    // }
-    // fa.cache.sync().unwrap();
+    for i in 0..len {
+        status(i, len);
+        let found = db.read_password(i, &mut hap.password).unwrap();
+        if !found {
+            continue;
+        }
+
+        hash_password(&mut hap).unwrap();
+        if hap.hash != hash_col[i] {
+            println!("row: {}, password: {}", i, String::from_utf8(hap.password.clone()).unwrap())
+        }
+    }
+
 
 }
 

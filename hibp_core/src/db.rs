@@ -1,6 +1,8 @@
 use std::{fs, io};
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, ErrorKind, Read, Seek, SeekFrom, Write};
+use std::mem::size_of;
+use std::os::unix::fs::FileExt;
 use std::path::{Path, PathBuf};
 use crate::{BitSet, compress_xz, compute_offset, convert_range, download_range, extract_gz, extract_xz, HASH, HashRange, IndexAndPasswordIterator, max_bit_prefix};
 
@@ -67,6 +69,55 @@ impl<'a> HIBPDB<'a> {
         self.update_password_and_bitset(end)?;
 
         Ok(())
+    }
+
+    pub fn read_password(&self, index: usize, mut password: &mut Vec<u8>) -> io::Result<bool> {
+        let password_col_file = self.dbdir.join("password.col");
+        if !password_col_file.exists() {
+            password.truncate(0);
+            return Err(io::Error::new(ErrorKind::NotFound, password_col_file.to_str().unwrap()));
+        }
+
+        let mut password_col = File::open(password_col_file)?;
+        let off = (index*size_of::<u64>()) as u64;
+        let mut t = [0u8; 8];
+        password_col.read_exact_at(&mut t, off)?;
+        let off = u64::from_le_bytes(t);
+        if off == u64::MAX {
+            password.truncate(0);
+            return Ok(false);
+        }
+
+        if password.len() < 1 {
+            password.resize(1, 0u8);
+        }
+
+        let mut found = false;
+        let mut lf = 0;
+        while !found {
+            password.resize(password.len()*2, 0u8);
+            let slice = &mut password.as_mut_slice()[lf..];
+            let read = self.password.read_at(slice, off+lf as u64)?;
+            let eof = lf+read < password.len();
+            if eof {
+                password.truncate(lf+read);
+            }
+
+            while lf < password.len() {
+                if password[lf] == b'\n' {
+                    password.truncate(lf);
+                    found = true;
+                    break;
+                }
+                lf += 1;
+            }
+
+            if eof {
+                break;
+            }
+        }
+
+        Ok(found)
     }
 
     fn load_bitset(&self) -> io::Result<(u64, BitSet)> {

@@ -57,9 +57,9 @@ impl Segment {
         unsafe { std::slice::from_raw_parts_mut(self.ptr, self.len) }
     }
 
-    // pub fn as_slice(&self) -> &[u8] {
-    //     unsafe { std::slice::from_raw_parts(self.ptr, self.len) }
-    // }
+    pub fn as_slice(&self) -> &[u8] {
+        unsafe { std::slice::from_raw_parts(self.ptr, self.len) }
+    }
 }
 
 impl Drop for Segment {
@@ -144,7 +144,7 @@ impl UserFileCache {
         Ok(it)
     }
 
-    fn _read(&self, buff: &mut [u8], off: usize) -> io::Result<()> {
+    fn _read(&self, buff: &mut [u8], off: u64) -> io::Result<()> {
         unsafe {
             let r = libc::pread64(self.fd, buff.as_mut_ptr() as *mut libc::c_void, buff.len(), off as libc::off64_t);
             errno_to_error!(r);
@@ -155,7 +155,7 @@ impl UserFileCache {
         }
     }
 
-    fn _write(fd: RawFd, buff: &[u8], off: usize) -> io::Result<()> {
+    fn _write(fd: RawFd, buff: &[u8], off: u64) -> io::Result<()> {
         unsafe {
             let w = libc::pwrite64(fd, buff.as_ptr() as *const libc::c_void, buff.len(), off as libc::off64_t);
             errno_to_error!(w);
@@ -176,7 +176,7 @@ impl UserFileCache {
         let mut seg = self.inactive.pop().unwrap();
 
         let slice = seg.as_mut_slice();
-        self._read(&mut slice[0..len], off).unwrap();
+        self._read(&mut slice[0..len], off as u64).unwrap();
         slice[len..].fill(0);
 
         self.active[segment_id] = Some(seg);
@@ -190,8 +190,7 @@ impl UserFileCache {
 
         let seg = self.active[q].as_mut().unwrap();
         let off = r*self.page_size;
-        let slice = &mut seg.as_mut_slice()[off..off+self.page_size];
-        return slice;
+        &mut seg.as_mut_slice()[off..off+self.page_size]
     }
 
     pub fn at(&mut self, page_id: usize) -> &[u8] {
@@ -214,9 +213,25 @@ impl UserFileCache {
     }
 
     pub fn sync(&mut self) -> io::Result<()> {
-        let ps = self.page_size;
-        for i in 0..self.len() {
-            Self::_write(self.fd, self.at(i), i*ps)?;
+        let ps = self.page_size as u64;
+        let maxiov = unsafe { libc::sysconf(libc::_SC_IOV_MAX) };
+        let fd = self.fd;
+
+        for i in 0..self.active.len() as u64 {
+            let segment: &Segment = self.active[i as usize].as_ref().unwrap();
+
+            let t = self.pages_per_segment as u64;
+            for r in self.dirty.contiguous_ranges(i*t..(i+1)*t) {
+                let foff = r.start*ps;
+                let tt = i*self.segment_len as u64;
+                let lo = (r.start*ps-tt) as usize;
+                let hi = (r.end*ps-tt) as usize;
+                Self::_write(fd, &segment.as_slice()[lo..hi], foff)?;
+            }
+        }
+        unsafe {
+            let r = libc::fsync(self.fd);
+            errno_to_error!(r);
         }
         Ok(())
     }

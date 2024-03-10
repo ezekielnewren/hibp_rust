@@ -492,6 +492,45 @@ impl BitSet {
         return sum;
     }
 
+    pub fn contiguous_ranges(&self, r: Range<u64>) -> Vec<Range<u64>> {
+        let mut v = Vec::new();
+        let mut i = r.start;
+        while i < r.end {
+            // find the first index that is true
+            let mut start = u64::MAX;
+            while i < r.end {
+                if self.get(i) {
+                    start = i;
+                    break;
+                }
+                i += 1;
+            }
+            if start == u64::MAX {
+                break;
+            } else {
+                i += 1;
+            }
+
+            // keep walking until we find an index that isn't true
+            let mut end = u64::MAX;
+            while i < r.end {
+                if !self.get(i) {
+                    end = i;
+                    break;
+                }
+                i += 1;
+            }
+            if end == u64::MAX {
+                end = r.end;
+            }
+            v.push(start..end);
+
+            i += 1;
+        }
+
+        v
+    }
+
     pub fn compact(&mut self) {
         if self.array.len() == 0 {
             return;

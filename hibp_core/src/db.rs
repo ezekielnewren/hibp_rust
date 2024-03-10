@@ -138,12 +138,12 @@ impl<'a> HIBPDB<'a> {
             let mut array = UserFileCacheArray::<u64>::open(tmp_file.as_path(), self.len())?;
             array.cache.preload();
 
-            // for i in 0..array.cache.len() {
-            //     array.cache.at_mut(i).fill(u8::MAX);
-            // }
-            for i in 0..array.len() {
-                array.set(i, u64::MAX);
+            for i in 0..array.cache.len() {
+                array.cache.at_mut(i).fill(u8::MAX);
             }
+            // for i in 0..array.len() {
+            //     array.set(i, u64::MAX);
+            // }
 
             let mut off = 0;
             self.password.seek(SeekFrom::Start(off))?;

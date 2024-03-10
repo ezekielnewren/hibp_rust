@@ -230,36 +230,45 @@ fn sandbox(args: &Args) {
     // HIBPDB::update_frequency_index(dbdir.as_path()).unwrap();
 
 
-    // let threshold = 1000000;
-    // let mut checkpoint = 0;
-    // let status = |off, len| {
-    //     if off-checkpoint >= threshold || off == len {
-    //         let percent = (off as f64 / len as f64)*100.0;
-    //         print!("{:.3}%\r", percent);
-    //         std::io::stdout().flush().unwrap();
-    //         checkpoint = off;
-    //     }
-    // };
-    // db.update_password_index(status).unwrap();
+    let threshold = 1000000;
+    let mut checkpoint = 0;
+    let status = |off, len| {
+        if off-checkpoint >= threshold || off == len {
+            let percent = (off as f64 / len as f64)*100.0;
+            print!("{:.3}%\r", percent);
+            std::io::stdout().flush().unwrap();
+            checkpoint = off;
+        }
+    };
+    db.update_password_index(status).unwrap();
 
-    let rows = 931856448;
-    let pages = roundup_divide!(rows*8, UserFileCache::page_size());
+    // let rows = 931856448;
+    // let pages = roundup_divide!(rows*8, UserFileCache::page_size());
 
     // let seg = Segment::new(1<<21).unwrap();
     // drop(seg);
 
     // let mut x = Vec::<u8>::new();
     // x.resize(pages*UserFileCache::page_size(), u8::MAX);
-
-    let pathname = PathBuf::from("/tmp/dump.bin");
-    let mut ufc = UserFileCache::open(pathname.as_path(), pages).unwrap();
-    let mut fa = UserFileCacheArray::<u64>::from(ufc);
-
-    fa.cache.preload();
-    for i in 0..fa.cache.len() {
-        let page = fa.cache.at_mut(i);
-        page.fill(u8::MAX);
-    }
+    //
+    // let pathname = PathBuf::from("/tmp/dump.bin");
+    // let mut ufc = UserFileCache::open(pathname.as_path(), pages).unwrap();
+    // let mut fa = UserFileCacheArray::<u64>::from(ufc);
+    //
+    // fa.cache.preload();
+    // for i in 0..fa.len() {
+    //     fa.set(i, u64::MAX);
+    // }
+    // for i in 0..fa.cache.len() {
+    //     let page = fa.cache.at_mut(i);
+    //     page.fill(u8::MAX);
+    // }
+    // for i in 12..14 {
+    //     fa.cache.at_mut(i);
+    // }
+    // for i in 510..520 {
+    //     fa.cache.at_mut(i);
+    // }
     // fa.cache.sync().unwrap();
 
 }

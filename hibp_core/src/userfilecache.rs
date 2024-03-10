@@ -38,13 +38,12 @@ pub struct Segment {
 impl Segment {
 
     pub fn new(len: usize) -> io::Result<Self> {
-        if UserFileCache::PAGESIZE%len != 0 {
+        if len%UserFileCache::page_size() != 0 {
             panic!("len must be a multiple of PAGESIZE");
         }
-
         let mut mem_ptr: *mut libc::c_void = std::ptr::null_mut();
         unsafe {
-            let ret = libc::posix_memalign(&mut mem_ptr, UserFileCache::PAGESIZE as libc::size_t, 1);
+            let ret = libc::posix_memalign(&mut mem_ptr, UserFileCache::page_size() as libc::size_t, len);
             errno_to_error!(ret);
         }
 
@@ -75,6 +74,7 @@ impl Drop for Segment {
 pub struct UserFileCache {
     fd: RawFd,
     pages: usize,
+    pages_per_segment: usize,
     segment_len: usize,
     dirty: BitSet,
     inactive: Vec<Segment>,
@@ -82,7 +82,9 @@ pub struct UserFileCache {
 }
 
 impl UserFileCache {
-    pub const PAGESIZE: usize = libc::_SC_PAGESIZE as usize;
+    pub fn page_size() -> usize {
+        return unsafe { libc::sysconf(libc::_SC_PAGESIZE) } as usize;
+    }
 
 
     pub fn open(pathname: &Path, number_of_pages: usize) -> io::Result<Self> {
@@ -90,7 +92,7 @@ impl UserFileCache {
         let fd: RawFd = unsafe {
             libc::open(path.as_ptr(),
                        libc::O_DIRECT | libc::O_RDWR | libc::O_CREAT,
-                       libc::S_IRUSR
+                       libc::S_IRUSR | libc::S_IWUSR
             )
         };
         if fd < 0 {
@@ -105,7 +107,7 @@ impl UserFileCache {
                 errno_to_error!(r);
             }
             let fsize = stat64.st_size as usize;
-            let t = number_of_pages*Self::PAGESIZE;
+            let t = number_of_pages*Self::page_size();
             if fsize < t {
                 let r = libc::ftruncate64(fd, t as libc::off64_t);
                 if r < 0 {
@@ -115,14 +117,19 @@ impl UserFileCache {
             }
         }
 
-        let it = Self {
+        let mut it = Self {
             fd,
-            pages: number_of_pages*Self::PAGESIZE,
+            pages: number_of_pages,
+            pages_per_segment: 0,
             segment_len: 1<<21,
             dirty: BitSet::new(),
             inactive: Vec::new(),
             active: Vec::new()
         };
+        it.pages_per_segment = it.segment_len/Self::page_size();
+        let div = it.segment_len/Self::page_size();
+        let segments = (it.pages+div-1)/div;
+        it.active.resize_with(segments, || None);
 
         Ok(it)
     }
@@ -131,13 +138,23 @@ impl UserFileCache {
         unsafe {
             let r = libc::pread64(self.fd, buff.as_mut_ptr() as *mut libc::c_void, buff.len(), off as libc::off64_t);
             errno_to_error!(r);
-            if r < buff.len() as libc::ssize_t {
-                return Err(io::Error::new(ErrorKind::UnexpectedEof, format!{"{}", r as isize}))
+            if (r as usize) < buff.len() {
+                return Err(io::Error::new(ErrorKind::UnexpectedEof, format!("expected: {} read: {}", buff.len(), r)));
             }
             Ok(())
         }
     }
 
+    fn _write(fd: RawFd, buff: &[u8], off: usize) -> io::Result<()> {
+        unsafe {
+            let w = libc::pwrite64(fd, buff.as_ptr() as *const libc::c_void, buff.len(), off as libc::off64_t);
+            errno_to_error!(w);
+            if (w as usize) < buff.len() {
+                return Err(io::Error::new(ErrorKind::UnexpectedEof, format!("only {} bytes written", w)));
+            }
+            Ok(())
+        }
+    }
 
     fn _segfault(&mut self, segment_id: usize) {
         if self.inactive.is_empty() {
@@ -151,16 +168,18 @@ impl UserFileCache {
         let slice = seg.as_mut_slice();
         self._read(&mut slice[0..len], off).unwrap();
         slice[len..].fill(0);
+
+        self.active[segment_id] = Some(seg);
     }
 
     fn _at(&mut self, page_id: usize) -> &mut [u8] {
-        let (q, r) = divmod!(page_id, self.segment_len);
+        let (q, r) = divmod!(page_id, self.pages_per_segment);
         if self.active[q].is_none() {
             self._segfault(q);
         }
 
         let seg = self.active[q].as_mut().unwrap();
-        let slice = &mut seg.as_mut_slice()[r*Self::PAGESIZE..(r+1)*Self::PAGESIZE];
+        let slice = &mut seg.as_mut_slice()[r*Self::page_size()..(r+1)*Self::page_size()];
         return slice;
     }
 
@@ -175,13 +194,19 @@ impl UserFileCache {
         self._at(page_id)
     }
 
+    pub fn sync(&mut self) -> io::Result<()> {
+        for i in 0..self.len() {
+            Self::_write(self.fd, self.at(i), i*Self::page_size())?;
+        }
+        Ok(())
+    }
 
     pub fn len(&self) -> usize {
         self.pages
     }
 
     pub fn file_size(&self) -> usize {
-        self.pages*Self::PAGESIZE
+        self.pages*Self::page_size()
     }
 
 }

@@ -1,7 +1,6 @@
 use std::{fs, io};
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, ErrorKind, Read, Seek, SeekFrom, Write};
-use std::os::unix::fs::FileExt;
 use std::path::{Path, PathBuf};
 use crate::{BitSet, compress_xz, compute_offset, convert_range, download_range, extract_gz, extract_xz, HASH, HashRange, IndexAndPasswordIterator, max_bit_prefix};
 
@@ -9,7 +8,8 @@ use futures::stream::{FuturesUnordered};
 use futures::StreamExt;
 use tokio::runtime::Runtime;
 use rayon::prelude::*;
-use crate::file_array::{FileArray, FileArrayMut};
+use crate::file_array::{FileArray, FileArrayMut, UserFileCacheArray};
+use crate::indexbycopy::{IndexByCopy, IndexByCopyMut};
 use crate::minbitrep::MinBitRep;
 use crate::transform::{Transform, TransformConcurrent};
 
@@ -136,11 +136,16 @@ impl<'a> HIBPDB<'a> {
         {
             // let mut password_col_vec = Vec::<u64>::new();
             // password_col_vec.resize(self.len(), u64::MAX);
-            let mut password_col_fa = FileArrayMut::open(tmp_file.as_path(), self.len())?;
-            let password_col = password_col_fa.as_mut_slice();
-            password_col.fill(u64::MAX);
-
+            // let mut password_col_fa = FileArrayMut::open(tmp_file.as_path(), self.len())?;
+            // let password_col = password_col_fa.as_mut_slice();
+            // password_col.fill(u64::MAX);
             let fsize = self.password.metadata()?.len();
+            let mut array = UserFileCacheArray::<u64>::open(tmp_file.as_path(), self.len())?;
+
+            for i in 0..array.len() {
+                array.set(i, u64::MAX);
+            }
+
 
             let mut off = 0;
             self.password.seek(SeekFrom::Start(off))?;
@@ -148,18 +153,21 @@ impl<'a> HIBPDB<'a> {
             let _ = it.for_each(|i, password| {
                 f(off, fsize);
                 let len = 8+password.len();
-                password_col[i as usize] = off+8;
+                array.set(i as usize, off+8);
+                // password_col[i as usize] = off+8;
                 off += len as u64;
             });
 
-            let mut fd = OpenOptions::new().create(true).write(true).truncate(true).append(false).open(tmp_file.as_path())?;
-            let mut buff: &mut [u8] = unsafe {
-                let ptr = password_col.as_mut_ptr() as *mut u8;
-                std::slice::from_raw_parts_mut(ptr, password_col.len()*8)
-            };
-            fd.write_all_at(&mut buff, 0)?;
-            fd.flush()?;
-            fd.sync_all()?;
+            array.sync();
+
+            // let mut fd = OpenOptions::new().create(true).write(true).truncate(true).append(false).open(tmp_file.as_path())?;
+            // let mut buff: &mut [u8] = unsafe {
+            //     let ptr = password_col.as_mut_ptr() as *mut u8;
+            //     std::slice::from_raw_parts_mut(ptr, password_col.len()*8)
+            // };
+            // fd.write_all_at(&mut buff, 0)?;
+            // fd.flush()?;
+            // fd.sync_all()?;
 
             f(off, fsize);
         }

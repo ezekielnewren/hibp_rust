@@ -111,22 +111,34 @@ pub struct UserFileCacheArray<T> {
 
 impl<T: Copy> UserFileCacheArray<T> {
 
+
+    pub fn open(pathname: &Path, elements: usize) -> io::Result<Self> {
+        let number_of_pages = (elements*size_of::<T>()+UserFileCache::page_size()-1)/UserFileCache::page_size();
+        let cache = UserFileCache::open(pathname, number_of_pages)?;
+        Ok(Self::from(cache))
+    }
+
     pub fn from(cache: UserFileCache) -> Self {
-        if UserFileCache::PAGESIZE%size_of::<T>() != 0 {
+        if UserFileCache::page_size()%size_of::<T>() != 0 {
             panic!("page size must be divisible by the generic type size");
         }
 
         Self {
             cache,
-            elements_per_page: UserFileCache::PAGESIZE/size_of::<T>(),
+            elements_per_page: UserFileCache::page_size()/size_of::<T>(),
             phantom: PhantomData::default(),
         }
     }
+
+    pub fn sync(&mut self) {
+        self.cache.sync().unwrap();
+    }
+
 }
 
 impl<T: Copy> IndexByCopy<T> for UserFileCacheArray<T> {
     fn get(&mut self, index: usize) -> T {
-        let (q, r) = divmod!(self.elements_per_page, index);
+        let (q, r) = divmod!(index, self.elements_per_page);
 
         let slice: &[T];
         unsafe {
@@ -144,7 +156,7 @@ impl<T: Copy> IndexByCopy<T> for UserFileCacheArray<T> {
 
 impl<T: Copy> IndexByCopyMut<T> for UserFileCacheArray<T> {
     fn set(&mut self, index: usize, value: T) {
-        let (q, r) = divmod!(self.elements_per_page, index);
+        let (q, r) = divmod!(index, self.elements_per_page);
 
         let slice: &mut [T];
         unsafe {

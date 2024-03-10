@@ -104,7 +104,7 @@ impl<'a, T> FileArray<'a, T> {
 
 
 pub struct UserFileCacheArray<T> {
-    cache: UserFileCache,
+    pub cache: UserFileCache,
     elements_per_page: usize,
     phantom: PhantomData<T>,
 }
@@ -129,11 +129,6 @@ impl<T: Copy> UserFileCacheArray<T> {
             phantom: PhantomData::default(),
         }
     }
-
-    pub fn sync(&mut self) {
-        self.cache.sync().unwrap();
-    }
-
 }
 
 impl<T: Copy> IndexByCopy<T> for UserFileCacheArray<T> {

@@ -194,6 +194,14 @@ impl UserFileCache {
         self._at(page_id)
     }
 
+    pub fn preload(&mut self) {
+        for i in 0..self.active.len() {
+            if self.active[i].is_none() {
+                self._segfault(i);
+            }
+        }
+    }
+
     pub fn sync(&mut self) -> io::Result<()> {
         for i in 0..self.len() {
             Self::_write(self.fd, self.at(i), i*Self::page_size())?;

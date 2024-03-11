@@ -28,8 +28,11 @@ struct Args {
     #[arg(short, long)]
     construct: bool,
 
-    #[arg(short, long)]
-    test: bool,
+    #[arg(long)]
+    export: bool,
+
+    // #[arg(long)]
+    // lookup: Vec<String>,
 }
 
 fn ingest(args: Args) {
@@ -156,19 +159,51 @@ fn construct(args: Args) {
     HIBPDB::update_construct_columns(dbdir.as_path(), status).unwrap();
 }
 
+fn lookup(args: Args) {
+
+
+
+}
+
+fn export(args: Args) {
+    let dbdir = PathBuf::from(args.dbdirectory.clone());
+    let mut db = HIBPDB::open(dbdir.as_path()).unwrap();
+
+    for i in 0..db.len() {
+        let row = db.frequency_idx.as_slice()[i] as usize;
+
+        let hash = &db.hash()[row];
+        let freq = db.frequency_col.as_slice()[row];
+        let mut password = Vec::<u8>::new();
+        let found = db.read_password(row, &mut password).unwrap();
+
+        println!("{}:{}:{}", hex::encode(hash), freq, String::from_utf8(password).unwrap())
+    }
+}
+
 fn main() {
     let args = Args::parse();
 
     if args.ingest {
         ingest(args);
-    } else if args.update {
+    }
+    else if args.update {
         update(args);
-    } else if args.construct {
+    }
+    else if args.construct {
         construct(args);
-    } else if args.left {
+    }
+    else if args.left {
         left(args);
-    } else if args.list {
+    }
+    else if args.list {
         list(args);
+    }
+    // else if args.lookup {
+    //     lookup(args);
+    // }
+    else if args.export {
+        export(args);
     }
 }
 

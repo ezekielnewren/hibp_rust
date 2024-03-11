@@ -23,6 +23,7 @@ pub struct HIBPDB<'a> {
     pub frequency_col: FileArray<'a, u64>,
     pub frequency_idx: FileArray<'a, u64>,
     pub password: File,
+    pub password_col: FileArray<'a, u64>,
     pub password_bitset: BitSet,
     pub password_buff: Vec<u8>,
 }
@@ -34,6 +35,7 @@ impl<'a> HIBPDB<'a> {
         let frequency_col_file = v.join("frequency.col");
         let frequency_idx_file = v.join("frequency.idx");
         let password_file = v.join("password.bin");
+        let password_col_file = v.join("password.col");
 
         let t = FileArray::open(hash_offset_file.as_path())?;
         let bit_len = MinBitRep::minbit((t.len()-2) as u64);
@@ -54,6 +56,7 @@ impl<'a> HIBPDB<'a> {
             frequency_col: FileArray::open(frequency_col_file.as_path())?,
             frequency_idx: FileArray::open(frequency_idx_file.as_path())?,
             password,
+            password_col: FileArray::open(password_col_file.as_path())?,
             password_bitset: BitSet::new(),
             password_buff: vec![],
         };
@@ -78,11 +81,7 @@ impl<'a> HIBPDB<'a> {
             return Err(io::Error::new(ErrorKind::NotFound, password_col_file.to_str().unwrap()));
         }
 
-        let mut password_col = File::open(password_col_file)?;
-        let off = (index*size_of::<u64>()) as u64;
-        let mut t = [0u8; 8];
-        password_col.read_exact_at(&mut t, off)?;
-        let off = u64::from_le_bytes(t);
+        let off = self.password_col.as_slice()[index];
         if off == u64::MAX {
             password.truncate(0);
             return Ok(false);
